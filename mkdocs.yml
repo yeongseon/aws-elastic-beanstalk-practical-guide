@@ -1,0 +1,194 @@
+site_name: AWS Elastic Beanstalk Practical Guide
+site_url: https://yeongseon.github.io/aws-elastic-beanstalk-practical-guide/
+site_description: Comprehensive guide for running web applications on AWS Elastic Beanstalk
+site_author: yeongseon
+
+repo_name: yeongseon/aws-elastic-beanstalk-practical-guide
+repo_url: https://github.com/yeongseon/aws-elastic-beanstalk-practical-guide
+
+theme:
+  name: material
+  language: en
+  favicon: assets/images/favicon.svg
+  logo: assets/images/favicon.svg
+  palette:
+    - scheme: default
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+  custom_dir: docs
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mermaid-zoom.js
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.mark
+  - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - toc:
+      permalink: true
+
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/yeongseon/aws-elastic-beanstalk-practical-guide
+
+nav:
+  - Home: index.md
+  - Start Here:
+    - start-here/overview.md
+    - start-here/learning-paths.md
+    - start-here/repository-map.md
+  - Platform:
+    - platform/index.md
+    - platform/how-elastic-beanstalk-works.md
+    - platform/environment-tiers.md
+    - platform/request-lifecycle.md
+    - platform/scaling.md
+    - platform/networking.md
+    - platform/resource-relationships.md
+    - platform/authentication-and-access.md
+    - platform/security-architecture.md
+  - Best Practices:
+    - best-practices/index.md
+    - best-practices/production-baseline.md
+    - best-practices/networking.md
+    - best-practices/security.md
+    - best-practices/deployment.md
+    - best-practices/scaling.md
+    - best-practices/reliability.md
+    - best-practices/common-anti-patterns.md
+  - Language Guides:
+    - language-guides/index.md
+    - Python:
+      - language-guides/python/index.md
+      - language-guides/python/01-local-run.md
+      - language-guides/python/02-first-deploy.md
+      - language-guides/python/03-configuration.md
+      - language-guides/python/04-logging-monitoring.md
+      - language-guides/python/05-infrastructure-as-code.md
+      - language-guides/python/06-ci-cd.md
+      - language-guides/python/07-custom-domain-ssl.md
+      - language-guides/python/python-runtime.md
+      - Python Recipes:
+        - language-guides/python/recipes/index.md
+        - language-guides/python/recipes/rds-integration.md
+        - language-guides/python/recipes/elasticache-redis.md
+        - language-guides/python/recipes/s3-storage.md
+        - language-guides/python/recipes/custom-platform-hooks.md
+        - language-guides/python/recipes/worker-environments.md
+        - language-guides/python/recipes/docker-deploy.md
+    - Node.js:
+      - language-guides/nodejs/index.md
+      - language-guides/nodejs/01-local-run.md
+      - language-guides/nodejs/02-first-deploy.md
+      - language-guides/nodejs/03-configuration.md
+      - language-guides/nodejs/04-logging-monitoring.md
+      - language-guides/nodejs/05-infrastructure-as-code.md
+      - language-guides/nodejs/06-ci-cd.md
+      - language-guides/nodejs/07-custom-domain-ssl.md
+      - language-guides/nodejs/nodejs-runtime.md
+      - Node.js Recipes:
+        - language-guides/nodejs/recipes/index.md
+        - language-guides/nodejs/recipes/rds-integration.md
+        - language-guides/nodejs/recipes/elasticache-redis.md
+        - language-guides/nodejs/recipes/s3-storage.md
+        - language-guides/nodejs/recipes/custom-platform-hooks.md
+        - language-guides/nodejs/recipes/worker-environments.md
+        - language-guides/nodejs/recipes/docker-deploy.md
+  - Operations:
+    - operations/index.md
+    - operations/scaling.md
+    - operations/environment-management.md
+    - operations/health-monitoring.md
+    - operations/updates-and-patching.md
+    - operations/networking.md
+    - operations/security.md
+    - operations/cost-optimization.md
+  - Troubleshooting:
+    - troubleshooting/index.md
+    - troubleshooting/architecture-overview.md
+    - troubleshooting/decision-tree.md
+    - troubleshooting/mental-model.md
+    - First 10 Minutes:
+      - troubleshooting/first-10-minutes/index.md
+      - troubleshooting/first-10-minutes/deployment-failures.md
+      - troubleshooting/first-10-minutes/health-degradation.md
+      - troubleshooting/first-10-minutes/connectivity-issues.md
+    - Playbooks:
+      - troubleshooting/playbooks/index.md
+      - Deployment & Availability:
+        - troubleshooting/playbooks/deployment-availability/deployment-failed.md
+        - troubleshooting/playbooks/deployment-availability/health-red-after-deploy.md
+        - troubleshooting/playbooks/deployment-availability/immutable-update-rollback.md
+        - troubleshooting/playbooks/deployment-availability/environment-launch-failed.md
+      - Performance:
+        - troubleshooting/playbooks/performance/high-latency-under-load.md
+        - troubleshooting/playbooks/performance/instance-degraded-health.md
+        - troubleshooting/playbooks/performance/cpu-memory-exhaustion.md
+      - Networking:
+        - troubleshooting/playbooks/networking/load-balancer-5xx.md
+        - troubleshooting/playbooks/networking/vpc-connectivity-issues.md
+        - troubleshooting/playbooks/networking/https-termination-issues.md
+    - Methodology:
+      - troubleshooting/methodology/troubleshooting-method.md
+      - troubleshooting/methodology/log-sources-map.md
+  - Reference:
+    - reference/index.md
+    - reference/eb-cli-cheatsheet.md
+    - reference/platform-limits.md
+    - reference/environment-properties.md
+    - reference/troubleshooting.md

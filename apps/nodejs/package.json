@@ -1,0 +1,16 @@
+{
+  "name": "aws-eb-nodejs-reference",
+  "version": "1.0.0",
+  "description": "AWS Elastic Beanstalk Node.js reference application",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}
