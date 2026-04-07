@@ -1,181 +1,256 @@
 # Immutable or Rolling Update Triggered Rollback
 
 ## 1. Summary
-
-An immutable update or rolling update started, replacement capacity was created, then update rolled back before completion.
-
-- Primary symptom: update policy executes partially and then environment reverts.
-- Primary risk: capacity churn, longer recovery window, and repeated failed replacement attempts.
-- Typical blast radius: environment-wide when minimum healthy thresholds are violated.
-- Investigation goal: identify whether rollback came from failed health checks, capacity shortage, timeout, or network policy blocks.
+A Rolling, Rolling with Additional Batch, or Immutable update starts replacing instances and then rolls back before completion because the healthy threshold is not sustained.
 
 ```mermaid
 flowchart TD
-    A[Update Policy Started] --> B{Rollback Trigger}
-    B --> C[New Instance Health Fail]
-    B --> D[Insufficient Capacity]
-    B --> E[Update Timeout]
-    B --> F[Security Group Block]
-    C --> G[Inspect target health and app logs]
-    D --> H[Inspect ASG and EC2 events]
-    E --> I[Inspect deployment duration and lifecycle]
-    F --> J[Inspect SG ingress/egress and health path]
+    A[Immutable or Rolling Update Triggered Rollback] --> B{Primary branch}
+    B --> C1[Replacement instances fail health checks]
+    C1 --> D1[Collect logs, metrics, and platform signals]
+    B --> C2[Replacement capacity is unavailable]
+    C2 --> D2[Collect logs, metrics, and platform signals]
+    B --> C3[Batch timeout expires]
+    C3 --> D3[Collect logs, metrics, and platform signals]
+    B --> C4[ALB-to-instance network path is broken]
+    C4 --> D4[Collect logs, metrics, and platform signals]
 ```
 
 ## 2. Common Misreadings
-
-- "Immutable is always safer, so rollback means a platform bug." Immutable still depends on new instances becoming healthy.
-- "New instances launched, so capacity is fine." Launch can succeed while registration/health fails.
-- "Rollback after timeout means app is healthy but slow." Timeout can hide deadlock or blocked health checks.
-- "Security groups are unchanged, so not relevant." New target group/instance path can expose latent SG gaps.
-- "Only app logs matter." Auto Scaling and CloudFormation events often provide first root-cause clue.
+- Rollback means the old version is broken.
+- The last event is always the root cause.
+- A successful upload proves the rollout is safe.
+- No user-facing 5xx means the deployment was healthy.
+- Local success makes platform differences irrelevant.
 
 ## 3. Competing Hypotheses
-
-| ID | Hypothesis | Mechanism | Predictive Signal |
-|---|---|---|---|
-| H1 | New instances fail health checks | Startup/readiness mismatch or health endpoint issue | Target health stays `unhealthy` for replacement instances |
-| H2 | Insufficient capacity | AZ/instance-type capacity or account quota constraints | ASG activity includes capacity-related errors |
-| H3 | Timeout exceeded | Batch never reaches healthy count before policy timeout | EB/CFN events show timeout and rollback |
-| H4 | Security group blocks | ALB-to-instance or instance-to-dependency path blocked | Health checks timeout, connection errors in logs |
+- - H1: Replacement instances fail health checks — Primary evidence should confirm or disprove whether replacement instances fail health checks.
+- - H2: Replacement capacity is unavailable — Primary evidence should confirm or disprove whether replacement capacity is unavailable.
+- - H3: Batch timeout expires — Primary evidence should confirm or disprove whether batch timeout expires.
+- - H4: ALB-to-instance network path is broken — Primary evidence should confirm or disprove whether alb-to-instance network path is broken.
 
 ## 4. What to Check First
+### Metrics
+- Check EB health colors and instance counts during the rollout window.
+- Check deployment-policy behavior: All at Once, Rolling, Rolling with Additional Batch, or Immutable.
+- Check whether replacement capacity converged or stalled.
 
-1. Capture policy and deployment events.
+### Logs
+- Read `eb-activity.log` for the first failing lifecycle stage.
+- Read `eb-engine.log` for package, hook, and appdeploy details.
+- Read `web.stdout.log` and `nginx/error.log` only after confirming the issue reached process start or health checks.
 
-```bash
-eb events --environment-name $ENV_NAME --all
-aws elasticbeanstalk describe-events --environment-name $ENV_NAME --max-items 200
-```
+### Platform Signals
+- Run `eb status --environment-name $ENV_NAME` and preserve `eb events --environment-name $ENV_NAME --all` before retrying.
+- Capture the first `Warning`, `Degraded`, or `Severe` transition in UTC.
+- Record whether the issue is one batch, one instance, or the entire environment.
 
-2. Review Auto Scaling replacement activities.
-
-```bash
-aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names $ASG_NAME
-aws autoscaling describe-scaling-activities --auto-scaling-group-name $ASG_NAME --max-items 100
-```
-
-3. Inspect CloudFormation stack events.
-
-```bash
-aws cloudformation describe-stack-events --stack-name $STACK_NAME --max-items 200
-```
-
-4. Verify target group health during update window.
-
-```bash
-aws elbv2 describe-target-health --target-group-arn $TARGET_GROUP_ARN
-```
-
-5. Check relevant security group rules.
-
-```bash
-aws ec2 describe-security-groups --group-ids $ALB_SECURITY_GROUP_ID $INSTANCE_SECURITY_GROUP_ID
-```
+| Signal | Normal | Abnormal | Why it matters |
+| --- | --- | --- | --- |
+| EB events | Clear start, deploy, and stable `Ok` state | Warnings, rollbacks, or unhealthy transitions appear | Separates clean rollouts from failing lifecycle stages |
+| Enhanced health | Brief `Warning` is followed by `Ok` | `Warning`, `Degraded`, or `Severe` persists | Shows whether the failure reached runtime readiness |
+| Platform logs | Ordered deploy steps complete successfully | A hook, deploy step, or bootstrap action exits non-zero | Reveals the first failing stage |
+| Replacement capacity | Desired and in-service counts converge quickly | Launches stall or batches never stabilize | Distinguishes app failure from capacity failure |
 
 ## 5. Evidence to Collect
+### Required Evidence
+- First symptom timestamp in UTC.
+- One healthy comparison sample if available.
+- Relevant EB health color transitions (`Ok`, `Warning`, `Degraded`, `Severe`).
+- Exact app version, platform branch, and environment name.
 
-| Evidence | Command | Why it matters |
-|---|---|---|
-| EB update timeline | `eb events --environment-name $ENV_NAME --all` | Establishes when rollback decision happened |
-| ASG launch and terminate activity | `aws autoscaling describe-scaling-activities --auto-scaling-group-name $ASG_NAME --max-items 100` | Shows whether replacement instances failed at launch or health stage |
-| CloudFormation resource events | `aws cloudformation describe-stack-events --stack-name $STACK_NAME --max-items 200` | Correlates orchestration failures and timeout reason |
-| Target group health reason codes | `aws elbv2 describe-target-health --target-group-arn $TARGET_GROUP_ARN` | Confirms protocol/status/timeout cause |
-| Instance deployment logs | `eb logs --environment-name $ENV_NAME --all` | Connects infra events with app startup behavior |
+### Useful Context
+- Whether the symptom started after deploy, config change, platform update, or traffic change.
+- Whether the issue is isolated to one instance, one batch, one subnet, or the full environment.
+- Any recent changes to health checks, listeners, routes, worker counts, dependencies, or deployment policy.
 
-Checklist for usable evidence:
-
-- Include update policy type in notes (immutable, rolling, rolling with additional batch).
-- Record minimum healthy threshold and batch size at failure time.
-- Capture one failed replacement instance ID and its startup logs.
-- Keep all timestamps in UTC to correlate service events.
-
-## 6. Validation and Disproof by Hypothesis
-
-### H1: New instances fail health checks
-
-Validate:
-
-- Replacement targets remain unhealthy with repeated check failures.
-- Instance logs show readiness endpoint unavailable or non-200.
-
-Disprove:
-
-- New instances pass target health but rollback still occurs for other reasons.
-
-### H2: Insufficient capacity
-
-Validate:
-
-- ASG activity indicates unavailable capacity or quota limitation.
-- Launch attempts repeatedly fail before app startup phase.
-
-Disprove:
-
-- Capacity is provisioned normally and failures occur post-launch.
-
-### H3: Timeout exceeded
-
-Validate:
-
-- Events explicitly reference timeout while waiting for healthy instances.
-- Startup and migration logs show long-running operations.
-
-Disprove:
-
-- Rollback occurs quickly due to immediate hard failures.
-
-### H4: Security group blocks
-
-Validate:
-
-- ALB cannot reach instance health port or path due to SG restrictions.
-- Network errors align with failed health-check interval.
-
-Disprove:
-
-- SG rules permit required traffic and direct checks succeed.
-
-## 7. Likely Root Cause Patterns
-
-- Readiness endpoint behavior changed without updating ALB health check expectations.
-- New AMI/platform branch increased startup time beyond update timeout.
-- Capacity headroom too small for immutable surge requirements.
-- Security group refactor omitted ALB-to-instance ingress on health port.
-- Background startup tasks scale with data size and exceed fixed timeout windows.
-
-## 8. Immediate Mitigations
-
-- Switch to safer, slower rollout only after confirming healthy startup behavior in staging.
-- Temporarily increase desired capacity to create headroom for replacement batches.
-- Extend health check grace period and update timeout where appropriate.
-- Reopen required security group paths for ALB health probes.
-- Roll back to last stable application version if regression confirmed.
+### CLI Investigation Commands
+#### 1. Capture deployment state, health, and events
 
 ```bash
-aws elasticbeanstalk update-environment --environment-name $ENV_NAME --version-label $LAST_GOOD_VERSION
+eb status --environment-name $ENV_NAME
+eb events --environment-name $ENV_NAME --all
+aws elasticbeanstalk describe-environment-health --environment-name $ENV_NAME --attribute-names All
 ```
 
-## 9. Prevention
+Example output:
 
-- Capacity-plan immutable updates with explicit surge budget and quota review.
-- Add automated pre-deploy readiness verification on new instances.
-- Keep startup path deterministic; move migrations and heavy warm-up out of first-request lifecycle.
-- Validate security groups as code with tests for ALB health check traffic.
-- Alert on target registration failures during deployment windows.
+```text
+Environment details for: $ENV_NAME
+  Status: Ready
+  Health: Warning
+2026-04-07 09:14:11    INFO    Environment update is starting.
+2026-04-07 09:15:08    WARN    Environment health has transitioned from Ok to Warning.
+```
+
+!!! tip
+    Use the first warning or severe transition as the anchor timestamp for every later query.
+
+#### 2. Pull deployment and instance logs
+
+```bash
+eb logs --environment-name $ENV_NAME --all
+aws elasticbeanstalk request-environment-info --environment-name $ENV_NAME --info-type tail
+```
+
+Example output:
+
+```text
+Logs were saved to /var/folders/.../logs-20260407.zip
+INFO: Retrieved tail logs for i-xxxxxxxxxxxxxxxxx
+```
+
+!!! tip
+    If platform logs fail before application logs show normal traffic, stay on platform lifecycle hypotheses first.
+
+#### 3. Inspect configuration and replacement activity
+
+```bash
+aws elasticbeanstalk describe-configuration-settings --application-name $APP_NAME --environment-name $ENV_NAME
+aws autoscaling describe-scaling-activities --auto-scaling-group-name $ASG_NAME --max-items 20
+```
+
+Example output:
+
+```text
+OptionSettings:
+  - Namespace: aws:autoscaling:updatepolicy:rollingupdate
+    OptionName: RollingUpdateType
+    Value: Health
+Activities:
+  - Description: Launching a new EC2 instance. StatusCode: Failed
+```
+
+!!! tip
+    Read this output against the exact incident window; stale success from another window can mislead you.
+
+
+### Evidence Timeline
+```mermaid
+sequenceDiagram
+    participant EB as Elastic Beanstalk
+    participant EC2 as Instance or batch
+    participant APP as App process
+    EB->>EC2: Start deploy or update step
+    EC2->>EC2: Run bootstrap, hooks, and appdeploy
+    EC2->>APP: Start process and health checks
+    APP-->>EB: Ok, Warning, Degraded, or Severe
+    Note over EB,APP: The first failing transition is the primary evidence point
+```
+
+### Sample Log Patterns
+```text
+2026/04/07 09:15:06 [ERROR] Deployment step failed with non-zero exit status
+2026/04/07 09:15:17 [ERROR] Environment rollback initiated for i-xxxxxxxxxxxxxxxxx
+2026/04/07 09:15:21 [error] 4110#4110: *7 connect() failed (111: Connection refused) while connecting to upstream
+2026/04/07 09:15:28 [WARN] Environment health has transitioned from Warning to Severe
+```
+
+### CloudWatch Logs Insights Queries with Example Output
+#### Query 1. Find the earliest incident evidence
+
+```sql
+fields @timestamp, @message
+| filter @message like /Batch|health checks/
+| sort @timestamp asc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:06 | Batch |
+| 2026-04-07 09:15:17 | health checks |
+
+!!! tip
+    How to Read This: The first row is usually the best root-cause anchor; later rows are often downstream consequences.
+
+#### Query 2. Find the most visible failure signatures
+
+```sql
+fields @timestamp, @message
+| filter @message like /rollback|timed out/
+| sort @timestamp desc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:21 | rollback |
+| 2026-04-07 09:15:28 | timed out |
+
+!!! tip
+    How to Read This: Compare these rows with EB health color transitions and deployment or traffic timing before acting.
+
+## 6. Validation and Disproof by Hypothesis
+### H1: Replacement instances fail health checks
+
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Replacement instances fail health checks`.
+
+Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
+
+### H2: Replacement capacity is unavailable
+
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Replacement capacity is unavailable`.
+
+Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
+
+### H3: Batch timeout expires
+
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Batch timeout expires`.
+
+Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
+
+### H4: ALB-to-instance network path is broken
+
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `ALB-to-instance network path is broken`.
+
+Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
+
+## 7. Likely Root Cause Patterns
+- A recent change shifted the failure into this playbook's domain.
+- The earliest warning was ignored and later symptoms obscured the first cause.
+- A platform, configuration, or dependency assumption drifted from the known-good state.
+- The environment had too little safety margin for rollout, load, or path changes.
+
+## 8. Immediate Mitigations
+1. Preserve the first-failure evidence before retrying or restarting anything.
+2. Contain user impact with the smallest safe rollback, scale, or routing change.
+3. Change only one suspected variable at a time and re-check health colors, logs, and metrics.
+4. Confirm that the symptom, not just the dashboard noise, has improved.
+
+## 9. Prevention
+- Keep environment configuration, health checks, and rollout assumptions under version control.
+- Test the same path in staging with the same platform branch and deployment policy.
+- Alert on the earliest signal for this failure mode, not only the final outage symptom.
+- Review baselines regularly so abnormal behavior is obvious during incidents.
 
 ## See Also
-
-- [Deployment Failed and Rolled Back](./deployment-failed.md)
-- [Health Turns Red After Successful Deploy](./health-red-after-deploy.md)
-- [Environment Launch Failed](./environment-launch-failed.md)
-- [Load Balancer 5xx](../networking/load-balancer-5xx.md)
-- [CPU and Memory Exhaustion](../performance/cpu-memory-exhaustion.md)
+- [Troubleshooting Playbooks Hub](../index.md)
+- [Load Balancer Returns 5xx Errors](../networking/load-balancer-5xx.md)
+- [Instance Shows Degraded or Severe Health](../performance/instance-degraded-health.md)
 
 ## Sources
-
-- [Deployment policies and settings for Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.rollingupdates.html)
-- [Immutable updates in Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environmentmgmt-updates-immutable.html)
-- [Elastic Beanstalk enhanced health](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html)
-- [Amazon EC2 Auto Scaling troubleshooting](https://docs.aws.amazon.com/autoscaling/ec2/userguide/ts-as-healthchecks.html)
-- [Application Load Balancer health checks](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html)
+- [Viewing Elastic Beanstalk events](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.events.html)
+- [Elastic Beanstalk logs](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.logging.html)
+- [Elastic Beanstalk enhanced health reporting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html)
+- [Troubleshooting Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html)

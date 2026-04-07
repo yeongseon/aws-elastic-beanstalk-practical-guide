@@ -70,7 +70,7 @@ Apply consistent tags to support Cost Explorer grouping.
 
 ```bash
 aws elasticbeanstalk update-tags-for-resource \
-    --resource-arn "arn:aws:elasticbeanstalk:us-east-1:123456789012:environment/my-app/my-app-prod" \
+    --resource-arn "arn:aws:elasticbeanstalk:us-east-1:<account-id>:environment/my-app/my-app-prod" \
     --tags-to-add Key=CostCenter,Value=WebPlatform Key=Environment,Value=Production \
     --profile "eb-ops" \
     --region "us-east-1"
@@ -115,10 +115,10 @@ Cost-aware guidance from AWS docs:
 
 ## See Also
 
--    [The Amazon EC2 instances for your Elastic Beanstalk environment](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.ec2.html)
--    [Auto Scaling your Elastic Beanstalk environment instances](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.as.html)
--    [Scheduled Auto Scaling actions for your Elastic Beanstalk environments](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environments-cfg-autoscaling-scheduledactions.html)
--    [Spot Instance support for your Elastic Beanstalk environment](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environments-cfg-autoscaling-spot.html)
+-    [Scaling](./scaling.md)
+-    [Environment Management](./environment-management.md)
+-    [Common Anti-Patterns](../best-practices/common-anti-patterns.md)
+-    [Platform Limits](../reference/platform-limits.md)
 
 ## Sources
 

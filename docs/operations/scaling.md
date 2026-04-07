@@ -121,10 +121,10 @@ Operational guidance from AWS docs to apply while tuning:
 
 ## See Also
 
--    [Auto Scaling your Elastic Beanstalk environment instances](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.as.html)
--    [Auto Scaling triggers for your Elastic Beanstalk environment](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environments-cfg-autoscaling-triggers.html)
--    [Scheduled Auto Scaling actions for your Elastic Beanstalk environments](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environments-cfg-autoscaling-scheduledactions.html)
--    [Auto Scaling health check setting for your Elastic Beanstalk environment](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environmentconfig-autoscaling-healthchecktype.html)
+-    [Health Monitoring](./health-monitoring.md)
+-    [Cost Optimization](./cost-optimization.md)
+-    [Environment Management](./environment-management.md)
+-    [How Elastic Beanstalk Works](../platform/how-elastic-beanstalk-works.md)
 
 ## Sources
 

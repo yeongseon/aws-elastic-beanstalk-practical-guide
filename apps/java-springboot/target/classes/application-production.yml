@@ -1,0 +1,14 @@
+spring:
+  config:
+    activate:
+      on-profile: production
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    root: INFO

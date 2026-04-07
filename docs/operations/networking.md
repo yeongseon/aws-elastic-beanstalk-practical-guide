@@ -48,7 +48,7 @@ aws elasticbeanstalk update-environment \
     --option-settings Namespace=aws:elasticbeanstalk:application,OptionName=Application Healthcheck URL,Value=/health \
     Namespace=aws:elbv2:listener:443,OptionName=ListenerEnabled,Value=true \
     Namespace=aws:elbv2:listener:443,OptionName=Protocol,Value=HTTPS \
-    Namespace=aws:elbv2:listener:443,OptionName=SSLCertificateArns,Value=arn:aws:acm:us-east-1:123456789012:certificate/11111111-2222-3333-4444-555555555555 \
+    Namespace=aws:elbv2:listener:443,OptionName=SSLCertificateArns,Value=arn:aws:acm:us-east-1:<account-id>:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
     Namespace=aws:elbv2:listener:80,OptionName=ListenerEnabled,Value=true \
     --profile "eb-ops" \
     --region "us-east-1"
@@ -71,7 +71,7 @@ Rotate TLS certificate by updating listener certificate ARN.
 ```bash
 aws elasticbeanstalk update-environment \
     --environment-name "my-app-prod" \
-    --option-settings Namespace=aws:elbv2:listener:443,OptionName=SSLCertificateArns,Value=arn:aws:acm:us-east-1:123456789012:certificate/66666666-7777-8888-9999-aaaaaaaaaaaa \
+    --option-settings Namespace=aws:elbv2:listener:443,OptionName=SSLCertificateArns,Value=arn:aws:acm:us-east-1:<account-id>:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
     --profile "eb-ops" \
     --region "us-east-1"
 ```
@@ -109,10 +109,10 @@ Networking constraints from AWS docs:
 
 ## See Also
 
--    [Load balancer for your Elastic Beanstalk environment](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.elb.html)
--    [Configuring an Application Load Balancer](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environments-cfg-alb.html)
--    [Managing EC2 security groups](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.ec2.instances.sg.html)
--    [Configuring access logs](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environments-cfg-loadbalancer-accesslogs.html)
+-    [Security](./security.md)
+-    [Health Monitoring](./health-monitoring.md)
+-    [Troubleshooting HTTPS Termination Issues](../troubleshooting/playbooks/networking/https-termination-issues.md)
+-    [Networking Architecture](../platform/networking.md)
 
 ## Sources
 

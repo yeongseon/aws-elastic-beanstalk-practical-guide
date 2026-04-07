@@ -100,7 +100,6 @@ Expected checks:
 
 - [Infrastructure as Code](./05-infrastructure-as-code.md)
 - [First Deploy](./02-first-deploy.md)
-- [Deploying an Existing Application Version](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.deploy-existing-version.html)
 
 ## Sources
 

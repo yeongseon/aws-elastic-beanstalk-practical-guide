@@ -9,16 +9,22 @@
 
 ## What You'll Build
 
-You will apply focused implementation recipes that extend a Node.js Elastic Beanstalk deployment: data tier integration, caching, object storage, platform customization, worker tiers, and container-based packaging.
+You will apply focused implementation recipes that extend a Node.js Elastic Beanstalk deployment: relational and key-value data access, secure configuration, private networking, async workers, platform customization, and container-based packaging.
 
 ```mermaid
 flowchart LR
     A[Node.js EB Environment] --> B[RDS Recipe]
-    A --> C[ElastiCache Recipe]
-    A --> D[S3 Recipe]
-    A --> E[Platform Hooks Recipe]
-    A --> F[Worker Tier Recipe]
-    A --> G[Docker Recipe]
+    A --> C[Secrets Manager Recipe]
+    A --> D[Parameter Store Recipe]
+    A --> E[IAM Instance Profile Recipe]
+    A --> F[DynamoDB Recipe]
+    A --> G[ElastiCache Recipe]
+    A --> H[S3 Recipe]
+    A --> I[VPC Endpoints Recipe]
+    A --> J[Platform Hooks Recipe]
+    A --> K[Worker Tier Recipe]
+    A --> L[Docker Recipes]
+    A --> M[CloudWatch Metrics Recipe]
 ```
 
 ## Steps
@@ -30,11 +36,19 @@ flowchart LR
     | Recipe File | Goal | Primary AWS Service |
     |---|---|---|
     | `rds-integration.md` | Connect app to managed relational database | Amazon RDS |
+    | `secrets-manager.md` | Load secrets at runtime without storing values in code | AWS Secrets Manager |
+    | `parameter-store.md` | Read centralized configuration values | AWS Systems Manager Parameter Store |
+    | `iam-instance-profile.md` | Grant AWS API access without static keys | IAM |
+    | `dynamodb.md` | Read and write managed key-value data | Amazon DynamoDB |
     | `elasticache-redis.md` | Add low-latency cache and session backing | Amazon ElastiCache for Redis |
     | `s3-storage.md` | Store and retrieve objects securely | Amazon S3 |
+    | `vpc-endpoints.md` | Keep AWS service traffic private inside the VPC | Amazon VPC |
     | `custom-platform-hooks.md` | Extend deployment lifecycle and proxy behavior | Elastic Beanstalk Platform Hooks |
+    | `sqs-worker.md` | Process queue-driven background jobs in a worker tier | Amazon SQS |
     | `worker-environments.md` | Process async jobs from queue | Elastic Beanstalk Worker Tier + Amazon SQS |
+    | `docker-multi-stage.md` | Build smaller production images | Docker |
     | `docker-deploy.md` | Deploy containerized Node.js workload | Elastic Beanstalk Docker Platform |
+    | `cloudwatch-custom-metrics.md` | Publish app-level telemetry to CloudWatch | Amazon CloudWatch |
 
 3. Apply one recipe at a time to keep rollback and validation simple.
 

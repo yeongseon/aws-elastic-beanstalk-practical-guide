@@ -1,215 +1,256 @@
 # Deployment Failed and Environment Rolled Back
 
 ## 1. Summary
-
-Deployment reached a failed state, and Elastic Beanstalk (EB) rolled back to the last known-good application version or canceled the update.
-
-- Primary symptom: `eb deploy` or console deployment shows failure and rollback events.
-- Primary risk: repeated deploy attempts amplify outage duration and hide the first error signal.
-- Typical blast radius: one environment, but shared dependencies can affect multiple environments.
-- Investigation goal: isolate the first failing stage in deployment lifecycle, then map it to one falsifiable hypothesis.
+A deployment reaches `Failed` and Elastic Beanstalk rolls back or abandons the update. This is confusing because the rollback message is the last symptom, not the first cause.
 
 ```mermaid
 flowchart TD
-    A[Deployment Started] --> B{Failure Stage}
-    B --> C[App Staging and Build]
-    B --> D[Procfile or Process Start]
-    B --> E[Platform Hooks]
-    B --> F[Instance Provisioning Limits]
-    C --> G[Collect eb-engine and cfn-init logs]
-    D --> H[Check process command and port binding]
-    E --> I[Check .platform/hooks exit code]
-    F --> J[Check Auto Scaling and EC2 limits]
-    G --> K[Validate and disprove hypotheses]
-    H --> K
-    I --> K
-    J --> K
+    A[Deployment Failed and Environment Rolled Back] --> B{Primary branch}
+    B --> C1[Application staging failed]
+    C1 --> D1[Collect logs, metrics, and platform signals]
+    B --> C2[Platform hook failed]
+    C2 --> D2[Collect logs, metrics, and platform signals]
+    B --> C3[Startup or port-binding mismatch]
+    C3 --> D3[Collect logs, metrics, and platform signals]
+    B --> C4[Replacement capacity failed]
+    C4 --> D4[Collect logs, metrics, and platform signals]
 ```
 
 ## 2. Common Misreadings
-
-- "Rollback means the previous version is broken." In many cases rollback indicates the *new* version could not pass deployment lifecycle checks.
-- "No HTTP errors means deployment is healthy." Deploy failure can happen before traffic shift.
-- "Green in one instance means all instances succeeded." One bad batch can force environment-wide rollback.
-- "EB events are enough." Root cause is usually in instance logs, especially `/var/log/eb-engine.log`.
-- "Hook script ran, so it succeeded." Non-zero exits in hook scripts trigger failure.
-- "It worked locally, so dependencies are fine." Platform image, package manager lockfiles, and runtime versions differ.
-- "Re-run deploy immediately." Repeating deploy without new evidence can rotate logs and lose the first-failure context.
+- Rollback means the old version is broken.
+- The last event is always the root cause.
+- A successful upload proves the rollout is safe.
+- No user-facing 5xx means the deployment was healthy.
+- Local success makes platform differences irrelevant.
 
 ## 3. Competing Hypotheses
-
-| ID | Hypothesis | Mechanism | Predictive Signal |
-|---|---|---|---|
-| H1 | Bad application code | App cannot compile, bootstrap, or pass startup checks | Runtime stack traces in `web.stdout.log` or startup command failure |
-| H2 | Missing dependencies | Required packages or system libs not present at deploy time | Package install errors in `eb-engine.log` |
-| H3 | Procfile error | Invalid command, wrong working directory, or wrong process type | Process manager start failures, command not found, non-zero exit |
-| H4 | Platform hook failure | `.platform/hooks` script exits non-zero or uses unavailable binary | Hook execution failure in `eb-engine.log` |
-| H5 | Resource limit exceeded | Instance launch or scaling blocked by quota/capacity constraints | Auto Scaling/EC2 events show insufficient capacity or limits |
+- - H1: Application staging failed — Primary evidence should confirm or disprove whether application staging failed.
+- - H2: Platform hook failed — Primary evidence should confirm or disprove whether platform hook failed.
+- - H3: Startup or port-binding mismatch — Primary evidence should confirm or disprove whether startup or port-binding mismatch.
+- - H4: Replacement capacity failed — Primary evidence should confirm or disprove whether replacement capacity failed.
 
 ## 4. What to Check First
+### Metrics
+- Check EB health colors and instance counts during the rollout window.
+- Check deployment-policy behavior: All at Once, Rolling, Rolling with Additional Batch, or Immutable.
+- Check whether replacement capacity converged or stalled.
 
-1. Snapshot EB event timeline first.
+### Logs
+- Read `eb-activity.log` for the first failing lifecycle stage.
+- Read `eb-engine.log` for package, hook, and appdeploy details.
+- Read `web.stdout.log` and `nginx/error.log` only after confirming the issue reached process start or health checks.
+
+### Platform Signals
+- Run `eb status --environment-name $ENV_NAME` and preserve `eb events --environment-name $ENV_NAME --all` before retrying.
+- Capture the first `Warning`, `Degraded`, or `Severe` transition in UTC.
+- Record whether the issue is one batch, one instance, or the entire environment.
+
+| Signal | Normal | Abnormal | Why it matters |
+| --- | --- | --- | --- |
+| EB events | Clear start, deploy, and stable `Ok` state | Warnings, rollbacks, or unhealthy transitions appear | Separates clean rollouts from failing lifecycle stages |
+| Enhanced health | Brief `Warning` is followed by `Ok` | `Warning`, `Degraded`, or `Severe` persists | Shows whether the failure reached runtime readiness |
+| Platform logs | Ordered deploy steps complete successfully | A hook, deploy step, or bootstrap action exits non-zero | Reveals the first failing stage |
+| Replacement capacity | Desired and in-service counts converge quickly | Launches stall or batches never stabilize | Distinguishes app failure from capacity failure |
+
+## 5. Evidence to Collect
+### Required Evidence
+- First symptom timestamp in UTC.
+- One healthy comparison sample if available.
+- Relevant EB health color transitions (`Ok`, `Warning`, `Degraded`, `Severe`).
+- Exact app version, platform branch, and environment name.
+
+### Useful Context
+- Whether the symptom started after deploy, config change, platform update, or traffic change.
+- Whether the issue is isolated to one instance, one batch, one subnet, or the full environment.
+- Any recent changes to health checks, listeners, routes, worker counts, dependencies, or deployment policy.
+
+### CLI Investigation Commands
+#### 1. Capture deployment state, health, and events
 
 ```bash
+eb status --environment-name $ENV_NAME
 eb events --environment-name $ENV_NAME --all
-aws elasticbeanstalk describe-events --environment-name $ENV_NAME --max-items 200
+aws elasticbeanstalk describe-environment-health --environment-name $ENV_NAME --attribute-names All
 ```
 
-2. Identify the first failed command in instance deployment engine logs.
+Example output:
+
+```text
+Environment details for: $ENV_NAME
+  Status: Ready
+  Health: Warning
+2026-04-07 09:14:11    INFO    Environment update is starting.
+2026-04-07 09:15:08    WARN    Environment health has transitioned from Ok to Warning.
+```
+
+!!! tip
+    Use the first warning or severe transition as the anchor timestamp for every later query.
+
+#### 2. Pull deployment and instance logs
 
 ```bash
 eb logs --environment-name $ENV_NAME --all
+aws elasticbeanstalk request-environment-info --environment-name $ENV_NAME --info-type tail
 ```
 
-3. If SSH is enabled, inspect primary logs directly on one failed instance.
+Example output:
+
+```text
+Logs were saved to /var/folders/.../logs-20260407.zip
+INFO: Retrieved tail logs for i-xxxxxxxxxxxxxxxxx
+```
+
+!!! tip
+    If platform logs fail before application logs show normal traffic, stay on platform lifecycle hypotheses first.
+
+#### 3. Inspect configuration and replacement activity
 
 ```bash
-sudo less /var/log/eb-engine.log
-sudo less /var/log/cfn-init.log
-sudo less /var/log/cfn-init-cmd.log
+aws elasticbeanstalk describe-configuration-settings --application-name $APP_NAME --environment-name $ENV_NAME
+aws autoscaling describe-scaling-activities --auto-scaling-group-name $ASG_NAME --max-items 20
 ```
 
-4. Validate app process startup definition and platform branch assumptions.
+Example output:
 
-```bash
-aws elasticbeanstalk describe-configuration-settings \
-    --application-name $APP_NAME \
-    --environment-name $ENV_NAME
+```text
+OptionSettings:
+  - Namespace: aws:autoscaling:updatepolicy:rollingupdate
+    OptionName: RollingUpdateType
+    Value: Health
+Activities:
+  - Description: Launching a new EC2 instance. StatusCode: Failed
 ```
 
-5. Check environment and instance capacity constraints.
+!!! tip
+    Read this output against the exact incident window; stale success from another window can mislead you.
 
-```bash
-aws autoscaling describe-scaling-activities --auto-scaling-group-name $ASG_NAME --max-items 50
-aws service-quotas get-service-quota --service-code ec2 --quota-code L-1216C47A
+
+### Evidence Timeline
+```mermaid
+sequenceDiagram
+    participant EB as Elastic Beanstalk
+    participant EC2 as Instance or batch
+    participant APP as App process
+    EB->>EC2: Start deploy or update step
+    EC2->>EC2: Run bootstrap, hooks, and appdeploy
+    EC2->>APP: Start process and health checks
+    APP-->>EB: Ok, Warning, Degraded, or Severe
+    Note over EB,APP: The first failing transition is the primary evidence point
 ```
 
-## 5. Evidence to Collect
+### Sample Log Patterns
+```text
+2026/04/07 09:15:06 [ERROR] Deployment step failed with non-zero exit status
+2026/04/07 09:15:17 [ERROR] Environment rollback initiated for i-xxxxxxxxxxxxxxxxx
+2026/04/07 09:15:21 [error] 4110#4110: *7 connect() failed (111: Connection refused) while connecting to upstream
+2026/04/07 09:15:28 [WARN] Environment health has transitioned from Warning to Severe
+```
 
-Collect evidence before making changes so you can compare before and after state.
+### CloudWatch Logs Insights Queries with Example Output
+#### Query 1. Find the earliest incident evidence
 
-| Evidence | Command | Why it matters |
-|---|---|---|
-| EB event chronology | `eb events --environment-name $ENV_NAME --all` | Shows the control-plane sequence and first visible failure |
-| Deployment engine log | `eb logs --environment-name $ENV_NAME --all` | Captures package install, hook execution, and app start lifecycle |
-| CloudFormation initialization logs | `sudo less /var/log/cfn-init.log` | Explains provisioning and config execution failures |
-| CloudFormation stack events | `aws cloudformation describe-stack-events --stack-name $STACK_NAME --max-items 200` | Correlates infra failures with app deploy stage |
-| Auto Scaling activities | `aws autoscaling describe-scaling-activities --auto-scaling-group-name $ASG_NAME --max-items 50` | Confirms launch/replace behavior and capacity errors |
+```sql
+fields @timestamp, @message
+| filter @message like /failed|rollback/
+| sort @timestamp asc
+| limit 20
+```
 
-Minimal evidence bundle checklist:
+Example results:
 
-- Event timestamp (UTC) for first failure.
-- Deployment ID or application version label.
-- One failed instance ID (`i-xxxxxxxxxxxxxxxxx`) and matching logs.
-- Exit code and failing command from `eb-engine.log`.
-- CloudFormation event logical resource and status reason.
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:06 | failed |
+| 2026-04-07 09:15:17 | rollback |
+
+!!! tip
+    How to Read This: The first row is usually the best root-cause anchor; later rows are often downstream consequences.
+
+#### Query 2. Find the most visible failure signatures
+
+```sql
+fields @timestamp, @message
+| filter @message like /non-zero|Connection refused/
+| sort @timestamp desc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:21 | non-zero |
+| 2026-04-07 09:15:28 | Connection refused |
+
+!!! tip
+    How to Read This: Compare these rows with EB health color transitions and deployment or traffic timing before acting.
 
 ## 6. Validation and Disproof by Hypothesis
+### H1: Application staging failed
 
-### H1: Bad application code
-
-Validate:
-
-- Look for traceback, uncaught exception, or fatal startup crash in app logs.
-- Confirm crash appears immediately after process launch in deploy timeline.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Application staging failed`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- App process starts and serves health check path with HTTP 200 on new instances.
+### H2: Platform hook failed
 
-```bash
-curl --silent --show-error --location --max-time 5 http://127.0.0.1/health
-```
-
-### H2: Missing dependencies
-
-Validate:
-
-- Detect package install failures (`No package`, `Could not resolve`, lockfile mismatch).
-- Confirm failure happens before process startup.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Platform hook failed`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- Build/install phase completes cleanly, and runtime libraries resolve.
+### H3: Startup or port-binding mismatch
 
-### H3: Procfile errors
-
-Validate:
-
-- `Procfile` command references missing binary or wrong script path.
-- Web process does not bind expected port for platform/ALB checks.
-
-Disprove:
-
-- Process command runs manually on instance with exit code `0` and binds expected port.
-
-### H4: Platform hook failures
-
-Validate:
-
-- `.platform/hooks/prebuild`, `predeploy`, or `postdeploy` script exits non-zero.
-- Hook script depends on command not available on current platform image.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Startup or port-binding mismatch`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- All hooks complete successfully in log sequence with explicit success markers.
+### H4: Replacement capacity failed
 
-### H5: Resource limit exceeded
-
-Validate:
-
-- Auto Scaling activity reports capacity errors or account limits.
-- CloudFormation events include launch failures tied to quota/capacity.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Replacement capacity failed`.
 
 Disprove:
-
-- Instances launch without delay and deployment still fails at app stage.
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
 ## 7. Likely Root Cause Patterns
-
-- Runtime version drift between local and EB platform branch.
-- Dependency install pipeline changed (lockfile, private package access, missing OS package).
-- Process start command changed without matching app structure.
-- Hook scripts assumed root packages or legacy platform paths.
-- Rolling/immutable batch replaced too many instances for current capacity envelope.
-- Late discovery of quota constraints during replacement surge.
+- A recent change shifted the failure into this playbook's domain.
+- The earliest warning was ignored and later symptoms obscured the first cause.
+- A platform, configuration, or dependency assumption drifted from the known-good state.
+- The environment had too little safety margin for rollout, load, or path changes.
 
 ## 8. Immediate Mitigations
-
-- Redeploy last known-good application version to stabilize service.
-
-```bash
-aws elasticbeanstalk describe-application-versions --application-name $APP_NAME --max-items 20
-aws elasticbeanstalk update-environment --environment-name $ENV_NAME --version-label $LAST_GOOD_VERSION
-```
-
-- Reduce deployment blast radius (smaller batch or all-at-once only in non-production test environments).
-- Temporarily disable non-critical hook steps to isolate failing stage.
-- Increase timeout settings if deployment is timing out but progressing normally.
-- Pre-scale environment capacity before retry when limits are suspected.
+1. Preserve the first-failure evidence before retrying or restarting anything.
+2. Contain user impact with the smallest safe rollback, scale, or routing change.
+3. Change only one suspected variable at a time and re-check health colors, logs, and metrics.
+4. Confirm that the symptom, not just the dashboard noise, has improved.
 
 ## 9. Prevention
-
-- Add CI artifact validation for `Procfile`, runtime version, lockfiles, and hook script executable bits.
-- Run staging environment smoke tests with identical platform branch before production deploy.
-- Monitor deployment health using EB events plus CloudFormation event alarms.
-- Keep hook scripts idempotent, explicit on dependencies, and verbose on failure.
-- Define and review EC2/Auto Scaling quotas before immutable or rolling-with-additional-batch updates.
-- Maintain a known-good rollback runbook with version labels and decision criteria.
+- Keep environment configuration, health checks, and rollout assumptions under version control.
+- Test the same path in staging with the same platform branch and deployment policy.
+- Alert on the earliest signal for this failure mode, not only the final outage symptom.
+- Review baselines regularly so abnormal behavior is obvious during incidents.
 
 ## See Also
-
-- [Health Red After Deploy](./health-red-after-deploy.md)
-- [Immutable Update Rollback](./immutable-update-rollback.md)
-- [Environment Launch Failed](./environment-launch-failed.md)
-- [Instance Degraded Health](../performance/instance-degraded-health.md)
-- [Load Balancer 5xx](../networking/load-balancer-5xx.md)
+- [Troubleshooting Playbooks Hub](../index.md)
+- [Load Balancer Returns 5xx Errors](../networking/load-balancer-5xx.md)
+- [Instance Shows Degraded or Severe Health](../performance/instance-degraded-health.md)
 
 ## Sources
-
-- [Deploying to Elastic Beanstalk environments](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.deploy-existing-version.html)
+- [Viewing Elastic Beanstalk events](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.events.html)
 - [Elastic Beanstalk logs](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.logging.html)
-- [Extending Linux platforms with platform hooks](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/platforms-linux-extend.hooks.html)
+- [Elastic Beanstalk enhanced health reporting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html)
 - [Troubleshooting Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html)
-- [AWS CloudFormation stack events](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/view-stack-events.html)
-- [Amazon EC2 service quotas](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-resource-limits.html)

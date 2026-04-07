@@ -1,179 +1,256 @@
 # Load Balancer Returns 5xx Errors
 
 ## 1. Summary
-
-Application Load Balancer (ALB) surfaces 5xx errors while routing traffic to Elastic Beanstalk targets.
-
-- Primary symptom: rising `HTTPCode_ELB_5XX_Count` or `HTTPCode_Target_5XX_Count` metrics.
-- Primary risk: user-visible failures, retry storms, and rapid health degradation.
-- Typical blast radius: all routes behind affected target group.
-- Investigation goal: determine if failures come from no healthy targets, target timeouts, application exceptions, or security-group-blocked health checks.
+The load balancer begins surfacing 5xx responses while routing traffic to an Elastic Beanstalk environment.
 
 ```mermaid
 flowchart TD
-    A[ALB 5xx Spike] --> B{Error Origin}
-    B --> C[No Healthy Targets]
-    B --> D[Target Timeout]
-    B --> E[Application Error]
-    B --> F[Health Check Blocked]
-    C --> G[target group health reasons]
-    D --> H[target response time and app latency]
-    E --> I[application and nginx error logs]
-    F --> J[security group ingress and egress review]
+    A[Load Balancer Returns 5xx Errors] --> B{Primary branch}
+    B --> C1[No healthy targets]
+    C1 --> D1[Collect logs, metrics, and platform signals]
+    B --> C2[Target timeout]
+    C2 --> D2[Collect logs, metrics, and platform signals]
+    B --> C3[Application error path]
+    C3 --> D3[Collect logs, metrics, and platform signals]
+    B --> C4[Health path or network block]
+    C4 --> D4[Collect logs, metrics, and platform signals]
 ```
 
 ## 2. Common Misreadings
-
-- "ALB 5xx means ALB is broken." Many 5xx outcomes are backend target failures.
-- "Target 5xx and ELB 5xx are identical." They represent different failure points.
-- "Health checks are green, so no target issues." Transient or path-specific failures can still produce 5xx.
-- "Nginx 502 only indicates proxy misconfiguration." It often reflects upstream app failures.
-- "Security groups are unchanged, so not relevant." Drift in attached SGs can silently break health checks.
+- Security groups alone explain all network behavior.
+- One successful request proves the path is healthy.
+- Every 5xx or timeout means the app is broken.
+- If the certificate exists, HTTPS must work.
+- Private networking failures cannot affect deployments.
 
 ## 3. Competing Hypotheses
-
-| ID | Hypothesis | Mechanism | Predictive Signal |
-|---|---|---|---|
-| H1 | No healthy targets | ALB has no routable healthy backend | Target group health shows all or most unhealthy |
-| H2 | Target timeout | Backend response exceeds ALB timeout budget | `TargetResponseTime` rises with 504 patterns |
-| H3 | Application error | App returns 5xx under specific paths/load | Target 5xx count rises with app error traces |
-| H4 | Security group blocks health checks | ALB cannot probe target health port/path | Health check failures with timeout reason |
+- - H1: No healthy targets — Primary evidence should confirm or disprove whether no healthy targets.
+- - H2: Target timeout — Primary evidence should confirm or disprove whether target timeout.
+- - H3: Application error path — Primary evidence should confirm or disprove whether application error path.
+- - H4: Health path or network block — Primary evidence should confirm or disprove whether health path or network block.
 
 ## 4. What to Check First
+### Metrics
+- Separate client-facing symptoms from backend target-state symptoms.
+- Check target health, ALB or VPC evidence, and EB health in the same time window.
+- Treat route, listener, certificate, and SG evidence as first-class signals.
 
-1. Separate ELB-level and target-level error metrics.
+### Logs
+- Read `nginx/access.log` for host, scheme, path, and status-code clues.
+- Read `nginx/error.log` for connection-refused, timeout, or TLS-adjacent failures.
+- Read `web.stdout.log` only after confirming traffic reached the app path.
 
-```bash
-aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB --metric-name HTTPCode_ELB_5XX_Count --dimensions Name=LoadBalancer,Value=$LOAD_BALANCER_DIMENSION --statistics Sum --period 60 --start-time $START_TIME --end-time $END_TIME
-aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB --metric-name HTTPCode_Target_5XX_Count --dimensions Name=LoadBalancer,Value=$LOAD_BALANCER_DIMENSION --statistics Sum --period 60 --start-time $START_TIME --end-time $END_TIME
-```
+### Platform Signals
+- Run `eb health --environment-name $ENV_NAME --refresh` and capture target state early.
+- Preserve route, listener, certificate, or subnet evidence before making changes.
+- Compare one successful path with one failing path whenever the symptom is intermittent.
 
-2. Inspect target health state and reason codes.
+| Signal | Normal | Abnormal | Why it matters |
+| --- | --- | --- | --- |
+| Target state | Targets are healthy and routing behaves as designed | Targets time out, reject probes, or route unexpectedly | Narrowest signal for path issues |
+| Request path | Host, scheme, and status code are consistent | Unexpected redirects, timeouts, or 5xx appear | Shows whether the client path and backend path align |
+| Control-plane config | Listeners, routes, SGs, or NAT path match intent | A listener, route, SG, or NAT assumption drifted | Explains why healthy code suddenly becomes unreachable |
+| Health color | Environment stays `Ok` or brief `Warning` | `Warning`, `Degraded`, or `Severe` persists | Shows when the path failure has become an availability incident |
 
-```bash
-aws elbv2 describe-target-health --target-group-arn $TARGET_GROUP_ARN
-```
+## 5. Evidence to Collect
+### Required Evidence
+- First symptom timestamp in UTC.
+- One healthy comparison sample if available.
+- Relevant EB health color transitions (`Ok`, `Warning`, `Degraded`, `Severe`).
+- Exact app version, platform branch, and environment name.
 
-3. Pull ALB access logs (if enabled) and instance logs.
+### Useful Context
+- Whether the symptom started after deploy, config change, platform update, or traffic change.
+- Whether the issue is isolated to one instance, one batch, one subnet, or the full environment.
+- Any recent changes to health checks, listeners, routes, worker counts, dependencies, or deployment policy.
 
-```bash
-eb logs --environment-name $ENV_NAME --all
-```
-
-4. Check ALB and instance security group paths.
-
-```bash
-aws ec2 describe-security-groups --group-ids $ALB_SECURITY_GROUP_ID $INSTANCE_SECURITY_GROUP_ID
-```
-
-5. Correlate with enhanced health signals.
+### CLI Investigation Commands
+#### 1. Check EB health and target state
 
 ```bash
 eb health --environment-name $ENV_NAME --refresh
+aws elasticbeanstalk describe-environment-health --environment-name $ENV_NAME --attribute-names All
+aws elbv2 describe-target-health --target-group-arn $TARGET_GROUP_ARN
 ```
 
-## 5. Evidence to Collect
+Example output:
 
-| Evidence | Command | Why it matters |
-|---|---|---|
-| ELB and target 5xx metrics | `aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB --metric-name HTTPCode_ELB_5XX_Count ...` | Separates front-door versus backend error origin |
-| Target health reasons | `aws elbv2 describe-target-health --target-group-arn $TARGET_GROUP_ARN` | Identifies timeout, code mismatch, or connection errors |
-| Target response latency | `aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB --metric-name TargetResponseTime ...` | Confirms timeout risk and backend slowness |
-| Application and proxy logs | `eb logs --environment-name $ENV_NAME --all` | Maps 5xx spikes to stack traces or upstream reset signatures |
-| Security group rules | `aws ec2 describe-security-groups --group-ids $ALB_SECURITY_GROUP_ID $INSTANCE_SECURITY_GROUP_ID` | Verifies required health check and request traffic paths |
+```text
+instance-id           status   cause
+i-xxxxxxxxxxxxxxxxx   Severe   Target.Timeout
+TargetHealthDescriptions:
+  - Target.Id: i-xxxxxxxxxxxxxxxxx
+    TargetHealth.State: unhealthy
+    TargetHealth.Reason: Target.Timeout
+```
 
-Collection notes:
+!!! tip
+    Target health reason codes usually narrow the issue faster than application logs alone.
 
-- Capture same 15-minute incident window across all evidence types.
-- Include at least one raw target health JSON snapshot.
-- Preserve one healthy-period comparison sample.
+#### 2. Collect proxy logs and recent events
+
+```bash
+eb logs --environment-name $ENV_NAME --all
+aws elasticbeanstalk describe-events --environment-name $ENV_NAME --max-items 20
+```
+
+Example output:
+
+```text
+Logs were saved to /var/folders/.../logs-20260407.zip
+2026-04-07 11:17:41    WARN    Instance deployment detected networking errors.
+```
+
+!!! tip
+    If proxy logs show timeouts but target health is also failing, keep both app-path and network-path hypotheses open.
+
+#### 3. Inspect the most likely network control point
+
+```bash
+aws ec2 describe-route-tables --filters Name=association.subnet-id,Values=$SUBNET_ID_1,$SUBNET_ID_2
+aws ec2 describe-security-groups --group-ids $ALB_SECURITY_GROUP_ID $INSTANCE_SECURITY_GROUP_ID
+```
+
+Example output:
+
+```text
+RouteTables:
+  - Routes:
+      - DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId: nat-xxxxxxxxxxxxxxxxx
+SecurityGroups:
+  - GroupId: sg-xxxxxxxxxxxxxxxxx
+```
+
+!!! tip
+    Preserve the first-known-bad route, listener, SG, or certificate state before changing it.
+
+
+### Evidence Timeline
+```mermaid
+sequenceDiagram
+    participant CLIENT as Client or instance
+    participant CTRL as Route, listener, SG, cert, or NAT
+    participant TARGET as Target or dependency
+    CLIENT->>CTRL: Send request or outbound call
+    CTRL->>TARGET: Forward, redirect, allow, or drop
+    TARGET-->>CLIENT: Success, timeout, 5xx, or TLS failure
+    Note over CLIENT,TARGET: Capture the exact path, hostname, port, and time before changing the control plane
+```
+
+### Sample Log Patterns
+```text
+2026-04-07T20:11:10.018Z ERROR connect ETIMEDOUT 198.51.100.x:443
+2026/04/07 20:11:12 [error] 4110#4110: *1011 upstream timed out (110: Connection timed out) while connecting to upstream
+2026-04-07T20:11:14.010Z ERROR certificate or route expectation mismatch detected
+2 <account-id> eni-xxxxxxxxxxxxxxxxx 10.0.x.x 198.51.100.x 45678 443 6 3 180 1712520670 1712520730 REJECT OK
+```
+
+### CloudWatch Logs Insights Queries with Example Output
+#### Query 1. Find the earliest incident evidence
+
+```sql
+fields @timestamp, @message
+| filter @message like /Connection refused|timed out/
+| sort @timestamp asc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:06 | Connection refused |
+| 2026-04-07 09:15:17 | timed out |
+
+!!! tip
+    How to Read This: The first row is usually the best root-cause anchor; later rows are often downstream consequences.
+
+#### Query 2. Find the most visible failure signatures
+
+```sql
+fields @timestamp, @message
+| filter @message like /Unhandled exception|502/
+| sort @timestamp desc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:21 | Unhandled exception |
+| 2026-04-07 09:15:28 | 502 |
+
+!!! tip
+    How to Read This: Compare these rows with EB health color transitions and deployment or traffic timing before acting.
 
 ## 6. Validation and Disproof by Hypothesis
-
 ### H1: No healthy targets
 
-Validate:
-
-- Target health shows no healthy instances in group.
-- ALB errors surge immediately after health transitions.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `No healthy targets`.
 
 Disprove:
-
-- Majority of targets healthy while errors persist.
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
 ### H2: Target timeout
 
-Validate:
-
-- `TargetResponseTime` climbs and ALB reports timeout-like behavior.
-- Application logs show slow handlers or blocked downstream calls.
-
-Disprove:
-
-- Response time remains low while 5xx persists from another cause.
-
-### H3: Application error
-
-Validate:
-
-- App stack traces align with failing endpoints and timestamps.
-- `HTTPCode_Target_5XX_Count` rises with no health check connectivity issue.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Target timeout`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- No app exceptions and failures are predominantly health-check/connectivity-related.
+### H3: Application error path
 
-### H4: Security group blocks health checks
-
-Validate:
-
-- SG rules do not permit ALB-to-instance health port traffic.
-- Target health reasons indicate timeout/unreachable.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Application error path`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- SG rules correct and health probes succeed consistently.
+### H4: Health path or network block
+
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Health path or network block`.
+
+Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
 ## 7. Likely Root Cause Patterns
-
-- Health check path changed or now requires auth.
-- Upstream app startup regression causes transient 502/504 bursts.
-- Connection or thread pool starvation under burst traffic.
-- Security group refactor removed ALB source SG ingress.
-- Target deregistration/replacement events overlap with high load.
+- A recent change shifted the failure into this playbook's domain.
+- The earliest warning was ignored and later symptoms obscured the first cause.
+- A platform, configuration, or dependency assumption drifted from the known-good state.
+- The environment had too little safety margin for rollout, load, or path changes.
 
 ## 8. Immediate Mitigations
-
-- Shift to known-good app version if error rate is sustained.
-- Increase temporary capacity to reduce per-target pressure.
-- Correct health check path and timeout if app readiness behavior changed.
-- Reapply required security group rules for ALB-to-instance traffic.
-- Enable access log analysis workflow if not already enabled.
-
-```bash
-aws elasticbeanstalk update-environment --environment-name $ENV_NAME --version-label $LAST_GOOD_VERSION
-```
+1. Preserve the first-failure evidence before retrying or restarting anything.
+2. Contain user impact with the smallest safe rollback, scale, or routing change.
+3. Change only one suspected variable at a time and re-check health colors, logs, and metrics.
+4. Confirm that the symptom, not just the dashboard noise, has improved.
 
 ## 9. Prevention
-
-- Alert separately on ELB 5xx and target 5xx metrics.
-- Keep health endpoint lightweight, stable, and unauthenticated.
-- Use canary verification after deployments before declaring success.
-- Test SG and NACL rules in CI for required health-check paths.
-- Track p95 latency and dependency timeout budget against ALB timeouts.
+- Keep environment configuration, health checks, and rollout assumptions under version control.
+- Test the same path in staging with the same platform branch and deployment policy.
+- Alert on the earliest signal for this failure mode, not only the final outage symptom.
+- Review baselines regularly so abnormal behavior is obvious during incidents.
 
 ## See Also
-
-- [Health Turns Red After Successful Deploy](../deployment-availability/health-red-after-deploy.md)
-- [Immutable or Rolling Update Triggered Rollback](../deployment-availability/immutable-update-rollback.md)
-- [High Latency Under Load](../performance/high-latency-under-load.md)
-- [CPU or Memory Consistently at Capacity](../performance/cpu-memory-exhaustion.md)
-- [HTTPS Termination Issues](./https-termination-issues.md)
+- [Troubleshooting Playbooks Hub](../index.md)
+- [Environment Launch Failed](../deployment-availability/environment-launch-failed.md)
+- [Load Balancer Returns 5xx Errors](./load-balancer-5xx.md)
 
 ## Sources
-
-- [Application Load Balancer troubleshooting](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-troubleshooting.html)
-- [Target group health checks for ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html)
-- [Application Load Balancer CloudWatch metrics](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-cloudwatch-metrics.html)
-- [Elastic Beanstalk enhanced health reporting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html)
+- [Using Elastic Beanstalk with Amazon VPC](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.vpc.html)
+- [Application Load Balancer target group health checks](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html)
 - [Elastic Beanstalk logs](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.logging.html)
+- [Troubleshooting Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html)

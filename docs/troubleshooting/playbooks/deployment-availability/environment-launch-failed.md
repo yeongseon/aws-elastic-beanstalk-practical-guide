@@ -1,196 +1,256 @@
 # Environment Launch Failed
 
 ## 1. Summary
-
-Creating a new Elastic Beanstalk environment failed during provisioning or initial deployment.
-
-- Primary symptom: environment transitions to `Terminated` or `Terminating` with launch failure events.
-- Primary risk: platform onboarding blocked and repeated failures consume time without isolating root cause.
-- Typical blast radius: new environment only, but shared IAM/VPC standards may affect all new launches.
-- Investigation goal: determine whether failure originates in IAM role setup, VPC/subnet design, instance profile, service role, or CloudFormation stack resources.
+A new Elastic Beanstalk environment fails during provisioning or the first deployment and never reaches a stable `Ok` state.
 
 ```mermaid
 flowchart TD
-    A[Create Environment] --> B{Failing Domain}
-    B --> C[IAM Authorization]
-    B --> D[VPC and Subnet Routing]
-    B --> E[Instance Profile and Service Role]
-    B --> F[CloudFormation Resource Failure]
-    C --> G[Policy simulator and role trust checks]
-    D --> H[Subnets route table NAT IGW checks]
-    E --> I[Managed policy and role association checks]
-    F --> J[Stack event reason and logical ID checks]
+    A[Environment Launch Failed] --> B{Primary branch}
+    B --> C1[IAM permission gap]
+    C1 --> D1[Collect logs, metrics, and platform signals]
+    B --> C2[VPC or subnet misconfiguration]
+    C2 --> D2[Collect logs, metrics, and platform signals]
+    B --> C3[Missing or invalid instance profile]
+    C3 --> D3[Collect logs, metrics, and platform signals]
+    B --> C4[Dependent stack resource fails]
+    C4 --> D4[Collect logs, metrics, and platform signals]
 ```
 
 ## 2. Common Misreadings
-
-- "Launch failed means EB platform is unavailable." Most failures are account configuration issues.
-- "Default VPC exists, so networking is valid." Wrong subnet type or missing routes can still block launch.
-- "Role exists, so permissions are enough." Missing managed policies or trust relationships still fail.
-- "CloudFormation failed at one resource, so ignore earlier events." First error in timeline is often causal.
-- "Environment terminated means no evidence remains." Stack events and EB events persist and should be exported.
+- Rollback means the old version is broken.
+- The last event is always the root cause.
+- A successful upload proves the rollout is safe.
+- No user-facing 5xx means the deployment was healthy.
+- Local success makes platform differences irrelevant.
 
 ## 3. Competing Hypotheses
-
-| ID | Hypothesis | Mechanism | Predictive Signal |
-|---|---|---|---|
-| H1 | IAM insufficient | Caller or service role lacks required actions | Access denied events in EB or CloudFormation |
-| H2 | VPC/subnet misconfiguration | No route/NAT/IGW or incompatible subnet selection | Instances fail to initialize or cannot reach required endpoints |
-| H3 | Instance profile missing | EC2 instance role absent or not attached to environment | Launch config/instance startup failures mentioning profile |
-| H4 | Service role missing | EB cannot manage resources without service role | Environment creation event references missing service role |
-| H5 | CloudFormation stack failure | Dependent resource creation fails | Stack events show `CREATE_FAILED` with reason |
+- - H1: IAM permission gap — Primary evidence should confirm or disprove whether iam permission gap.
+- - H2: VPC or subnet misconfiguration — Primary evidence should confirm or disprove whether vpc or subnet misconfiguration.
+- - H3: Missing or invalid instance profile — Primary evidence should confirm or disprove whether missing or invalid instance profile.
+- - H4: Dependent stack resource fails — Primary evidence should confirm or disprove whether dependent stack resource fails.
 
 ## 4. What to Check First
+### Metrics
+- Check EB health colors and instance counts during the rollout window.
+- Check deployment-policy behavior: All at Once, Rolling, Rolling with Additional Batch, or Immutable.
+- Check whether replacement capacity converged or stalled.
 
-1. Pull environment and stack events immediately.
+### Logs
+- Read `eb-activity.log` for the first failing lifecycle stage.
+- Read `eb-engine.log` for package, hook, and appdeploy details.
+- Read `web.stdout.log` and `nginx/error.log` only after confirming the issue reached process start or health checks.
 
-```bash
-eb events --environment-name $ENV_NAME --all
-aws cloudformation describe-stack-events --stack-name $STACK_NAME --max-items 200
-```
+### Platform Signals
+- Run `eb status --environment-name $ENV_NAME` and preserve `eb events --environment-name $ENV_NAME --all` before retrying.
+- Capture the first `Warning`, `Degraded`, or `Severe` transition in UTC.
+- Record whether the issue is one batch, one instance, or the entire environment.
 
-2. Validate service role and instance profile assignments.
-
-```bash
-aws elasticbeanstalk describe-configuration-settings \
-    --application-name $APP_NAME \
-    --environment-name $ENV_NAME
-aws iam get-role --role-name $SERVICE_ROLE_NAME
-aws iam get-role --role-name $INSTANCE_PROFILE_ROLE_NAME
-```
-
-3. Confirm instance profile exists and is attached.
-
-```bash
-aws iam get-instance-profile --instance-profile-name $INSTANCE_PROFILE_NAME
-```
-
-4. Verify VPC, subnet, and route assumptions.
-
-```bash
-aws ec2 describe-subnets --subnet-ids $SUBNET_ID_1 $SUBNET_ID_2
-aws ec2 describe-route-tables --filters Name=association.subnet-id,Values=$SUBNET_ID_1,$SUBNET_ID_2
-```
-
-5. Use IAM policy simulation for denied actions.
-
-```bash
-aws iam simulate-principal-policy \
-    --policy-source-arn arn:aws:iam::<account-id>:role/$SERVICE_ROLE_NAME \
-    --action-names elasticbeanstalk:CreateEnvironment ec2:RunInstances autoscaling:CreateAutoScalingGroup
-```
+| Signal | Normal | Abnormal | Why it matters |
+| --- | --- | --- | --- |
+| EB events | Clear start, deploy, and stable `Ok` state | Warnings, rollbacks, or unhealthy transitions appear | Separates clean rollouts from failing lifecycle stages |
+| Enhanced health | Brief `Warning` is followed by `Ok` | `Warning`, `Degraded`, or `Severe` persists | Shows whether the failure reached runtime readiness |
+| Platform logs | Ordered deploy steps complete successfully | A hook, deploy step, or bootstrap action exits non-zero | Reveals the first failing stage |
+| Replacement capacity | Desired and in-service counts converge quickly | Launches stall or batches never stabilize | Distinguishes app failure from capacity failure |
 
 ## 5. Evidence to Collect
+### Required Evidence
+- First symptom timestamp in UTC.
+- One healthy comparison sample if available.
+- Relevant EB health color transitions (`Ok`, `Warning`, `Degraded`, `Severe`).
+- Exact app version, platform branch, and environment name.
 
-| Evidence | Command | Why it matters |
-|---|---|---|
-| EB launch events | `eb events --environment-name $ENV_NAME --all` | Provides high-level launch stage and failure category |
-| CloudFormation `CREATE_FAILED` resources | `aws cloudformation describe-stack-events --stack-name $STACK_NAME --max-items 200` | Identifies exact logical resource and reason |
-| IAM role definitions | `aws iam get-role --role-name $SERVICE_ROLE_NAME` | Confirms trust policy and role existence |
-| IAM simulation results | `aws iam simulate-principal-policy ...` | Proves allowed/denied actions for critical APIs |
-| VPC route coverage | `aws ec2 describe-route-tables --filters Name=association.subnet-id,Values=$SUBNET_ID_1,$SUBNET_ID_2` | Shows internet/NAT path for private/public subnet model |
+### Useful Context
+- Whether the symptom started after deploy, config change, platform update, or traffic change.
+- Whether the issue is isolated to one instance, one batch, one subnet, or the full environment.
+- Any recent changes to health checks, listeners, routes, worker counts, dependencies, or deployment policy.
 
-Evidence package minimum:
+### CLI Investigation Commands
+#### 1. Capture deployment state, health, and events
 
-- Stack ID and first `CREATE_FAILED` event with reason text.
-- Role names used by environment (`ServiceRole`, instance profile role).
-- Subnet IDs selected and their route table summary.
-- Any explicit `AccessDenied` API action names.
+```bash
+eb status --environment-name $ENV_NAME
+eb events --environment-name $ENV_NAME --all
+aws elasticbeanstalk describe-environment-health --environment-name $ENV_NAME --attribute-names All
+```
+
+Example output:
+
+```text
+Environment details for: $ENV_NAME
+  Status: Ready
+  Health: Warning
+2026-04-07 09:14:11    INFO    Environment update is starting.
+2026-04-07 09:15:08    WARN    Environment health has transitioned from Ok to Warning.
+```
+
+!!! tip
+    Use the first warning or severe transition as the anchor timestamp for every later query.
+
+#### 2. Pull deployment and instance logs
+
+```bash
+eb logs --environment-name $ENV_NAME --all
+aws elasticbeanstalk request-environment-info --environment-name $ENV_NAME --info-type tail
+```
+
+Example output:
+
+```text
+Logs were saved to /var/folders/.../logs-20260407.zip
+INFO: Retrieved tail logs for i-xxxxxxxxxxxxxxxxx
+```
+
+!!! tip
+    If platform logs fail before application logs show normal traffic, stay on platform lifecycle hypotheses first.
+
+#### 3. Inspect configuration and replacement activity
+
+```bash
+aws elasticbeanstalk describe-configuration-settings --application-name $APP_NAME --environment-name $ENV_NAME
+aws autoscaling describe-scaling-activities --auto-scaling-group-name $ASG_NAME --max-items 20
+```
+
+Example output:
+
+```text
+OptionSettings:
+  - Namespace: aws:autoscaling:updatepolicy:rollingupdate
+    OptionName: RollingUpdateType
+    Value: Health
+Activities:
+  - Description: Launching a new EC2 instance. StatusCode: Failed
+```
+
+!!! tip
+    Read this output against the exact incident window; stale success from another window can mislead you.
+
+
+### Evidence Timeline
+```mermaid
+sequenceDiagram
+    participant EB as Elastic Beanstalk
+    participant EC2 as Instance or batch
+    participant APP as App process
+    EB->>EC2: Start deploy or update step
+    EC2->>EC2: Run bootstrap, hooks, and appdeploy
+    EC2->>APP: Start process and health checks
+    APP-->>EB: Ok, Warning, Degraded, or Severe
+    Note over EB,APP: The first failing transition is the primary evidence point
+```
+
+### Sample Log Patterns
+```text
+2026/04/07 09:15:06 [ERROR] Deployment step failed with non-zero exit status
+2026/04/07 09:15:17 [ERROR] Environment rollback initiated for i-xxxxxxxxxxxxxxxxx
+2026/04/07 09:15:21 [error] 4110#4110: *7 connect() failed (111: Connection refused) while connecting to upstream
+2026/04/07 09:15:28 [WARN] Environment health has transitioned from Warning to Severe
+```
+
+### CloudWatch Logs Insights Queries with Example Output
+#### Query 1. Find the earliest incident evidence
+
+```sql
+fields @timestamp, @message
+| filter @message like /CREATE_FAILED|AccessDenied/
+| sort @timestamp asc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:06 | CREATE_FAILED |
+| 2026-04-07 09:15:17 | AccessDenied |
+
+!!! tip
+    How to Read This: The first row is usually the best root-cause anchor; later rows are often downstream consequences.
+
+#### Query 2. Find the most visible failure signatures
+
+```sql
+fields @timestamp, @message
+| filter @message like /instance profile|service role/
+| sort @timestamp desc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:21 | instance profile |
+| 2026-04-07 09:15:28 | service role |
+
+!!! tip
+    How to Read This: Compare these rows with EB health color transitions and deployment or traffic timing before acting.
 
 ## 6. Validation and Disproof by Hypothesis
+### H1: IAM permission gap
 
-### H1: IAM insufficient
-
-Validate:
-
-- `AccessDenied` or unauthorized operation appears in events.
-- Policy simulation denies one required action used during launch.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `IAM permission gap`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- Simulation allows all required actions and failure occurs in networking/resource domain.
+### H2: VPC or subnet misconfiguration
 
-### H2: VPC/subnet misconfiguration
-
-Validate:
-
-- Subnets lack required route to internet/NAT for package retrieval and service calls.
-- Health checks fail because instances are unreachable in selected subnets.
-
-Disprove:
-
-- Route tables and subnet placement align with EB load balancer and instance model.
-
-### H3: Instance profile missing
-
-Validate:
-
-- Environment references missing profile or role during EC2 launch.
-- CloudFormation resource for launch configuration/profile fails.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `VPC or subnet misconfiguration`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- Instance profile exists, role attached, and EC2 can assume role.
+### H3: Missing or invalid instance profile
 
-### H4: Service role missing
-
-Validate:
-
-- EB event explicitly reports missing or invalid service role.
-- Role trust policy lacks `elasticbeanstalk.amazonaws.com` service principal.
-
-Disprove:
-
-- Service role is valid and used successfully in API calls.
-
-### H5: CloudFormation stack failure
-
-Validate:
-
-- Stack event reason identifies failing dependent resource.
-- Reproducing with same template/options yields same resource failure.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Missing or invalid instance profile`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- Stack completes after fixing IAM/network settings, indicating prior dependency issue.
+### H4: Dependent stack resource fails
+
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Dependent stack resource fails`.
+
+Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
 ## 7. Likely Root Cause Patterns
-
-- Service role was deleted or replaced without required managed policies.
-- Custom VPC uses private subnets without NAT gateway route.
-- Instance profile role exists but missing core EB managed policies.
-- Environment configuration references stale subnet IDs.
-- CloudFormation stack execution role restrictions block dependent resources.
+- A recent change shifted the failure into this playbook's domain.
+- The earliest warning was ignored and later symptoms obscured the first cause.
+- A platform, configuration, or dependency assumption drifted from the known-good state.
+- The environment had too little safety margin for rollout, load, or path changes.
 
 ## 8. Immediate Mitigations
-
-- Recreate or reattach required service role and instance profile policies.
-- Use known-good VPC/subnet pair validated by an existing healthy environment.
-- Launch a minimal sample app environment to separate platform setup from app code issues.
-- If CloudFormation fails repeatedly, terminate failed stack and relaunch with corrected parameters.
-- Capture all stack events before retry to avoid losing first-failure evidence.
+1. Preserve the first-failure evidence before retrying or restarting anything.
+2. Contain user impact with the smallest safe rollback, scale, or routing change.
+3. Change only one suspected variable at a time and re-check health colors, logs, and metrics.
+4. Confirm that the symptom, not just the dashboard noise, has improved.
 
 ## 9. Prevention
-
-- Manage IAM roles and VPC settings as code with review and drift detection.
-- Create account bootstrap checklist for EB prerequisites (service role, instance profile, subnet model).
-- Add pre-flight validation script for role existence, trust policy, subnet routes, and required quotas.
-- Maintain reusable environment templates with validated networking and role parameters.
-- Alert on IAM role/policy changes affecting EB service and instance profiles.
+- Keep environment configuration, health checks, and rollout assumptions under version control.
+- Test the same path in staging with the same platform branch and deployment policy.
+- Alert on the earliest signal for this failure mode, not only the final outage symptom.
+- Review baselines regularly so abnormal behavior is obvious during incidents.
 
 ## See Also
-
-- [Deployment Failed and Rolled Back](./deployment-failed.md)
-- [Immutable or Rolling Update Triggered Rollback](./immutable-update-rollback.md)
-- [VPC Connectivity Issues](../networking/vpc-connectivity-issues.md)
-- [HTTPS Termination Issues](../networking/https-termination-issues.md)
-- [Instance Degraded Health](../performance/instance-degraded-health.md)
+- [Troubleshooting Playbooks Hub](../index.md)
+- [Load Balancer Returns 5xx Errors](../networking/load-balancer-5xx.md)
+- [Instance Shows Degraded or Severe Health](../performance/instance-degraded-health.md)
 
 ## Sources
-
-- [Managing Elastic Beanstalk service roles](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/iam-servicerole.html)
-- [Managing Elastic Beanstalk instance profiles](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/iam-instanceprofile.html)
-- [Using Elastic Beanstalk with Amazon VPC](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.vpc.html)
-- [Elastic Beanstalk troubleshooting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html)
-- [IAM policy simulator](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_testing-policies.html)
-- [CloudFormation stack events](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/view-stack-events.html)
+- [Viewing Elastic Beanstalk events](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.events.html)
+- [Elastic Beanstalk logs](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.logging.html)
+- [Elastic Beanstalk enhanced health reporting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html)
+- [Troubleshooting Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html)

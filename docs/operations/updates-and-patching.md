@@ -107,10 +107,10 @@ Maintenance strategy guidance:
 
 ## See Also
 
--    [Managed platform updates](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environment-platform-update-managed.html)
--    [Updating your Elastic Beanstalk environment's platform version](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.platform.upgrade.html)
--    [Blue/Green deployments with Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.CNAMESwap.html)
--    [Immutable environment updates](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environmentmgmt-updates-immutable.html)
+-    [Blue/Green Deployment](./blue-green-deployment.md)
+-    [Immutable Deployment](./immutable-deployment.md)
+-    [Health Monitoring](./health-monitoring.md)
+-    [Environment Management](./environment-management.md)
 
 ## Sources
 

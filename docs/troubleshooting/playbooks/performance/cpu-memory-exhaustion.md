@@ -1,196 +1,253 @@
 # CPU or Memory Consistently at Capacity
 
 ## 1. Summary
-
-Instances run near CPU or memory limits for sustained periods, reducing headroom and increasing failure probability.
-
-- Primary symptom: persistent high `CPUUtilization`, memory pressure, and elevated response times.
-- Primary risk: request timeouts, OOM restarts, and degraded health transitions.
-- Typical blast radius: full environment when all instances share same sizing and process model.
-- Investigation goal: differentiate undersized instance class from software inefficiency and process overcommit.
+Instances spend sustained periods near CPU or memory limits, leaving little headroom for spikes or noisy neighbors.
 
 ```mermaid
 flowchart TD
-    A[Sustained CPU or Memory Saturation] --> B{Resource Driver}
-    B --> C[Instance Type Too Small]
-    B --> D[Memory Leak]
-    B --> E[CPU-bound Processing]
-    B --> F[Too Many Worker Processes]
-    B --> G[Swap Thrashing]
-    C --> H[right-size compute and memory]
-    D --> I[heap profiling and leak fix]
-    E --> J[optimize hot paths and offload work]
-    F --> K[tune worker count]
-    G --> L[reduce memory pressure and swap]
+    A[CPU or Memory Consistently at Capacity] --> B{Primary branch}
+    B --> C1[Instance type is undersized]
+    C1 --> D1[Collect logs, metrics, and platform signals]
+    B --> C2[Memory leak or retained-state growth]
+    C2 --> D2[Collect logs, metrics, and platform signals]
+    B --> C3[CPU-bound request path]
+    C3 --> D3[Collect logs, metrics, and platform signals]
+    B --> C4[Worker/process overcommit]
+    C4 --> D4[Collect logs, metrics, and platform signals]
 ```
 
 ## 2. Common Misreadings
-
-- "High CPU means healthy utilization." Sustained saturation removes burst capacity and raises latency risk.
-- "Scale-out alone will fix memory leaks." Leak behavior may propagate to new instances.
-- "OOM killed one process only." Repeated OOM cycles destabilize the full request path.
-- "More workers always improve throughput." Overcommitted workers can increase context switching and memory pressure.
-- "Swap usage is normal." Active swap-in/out indicates serious memory contention.
+- Average latency is enough to judge user impact.
+- Moderate CPU means there is no bottleneck.
+- A restart proves the root cause is fixed.
+- Only one slow route cannot affect the whole environment.
+- Scale-out timing never matters once new instances appear.
 
 ## 3. Competing Hypotheses
-
-| ID | Hypothesis | Mechanism | Predictive Signal |
-|---|---|---|---|
-| H1 | Undersized instance type | Baseline workload exceeds CPU/memory envelope | High utilization even at moderate request rate |
-| H2 | Memory leak | Runtime heap or object retention grows continuously | Memory trend rises with uptime, periodic OOM events |
-| H3 | CPU-bound processing | Expensive synchronous compute blocks request workers | CPU pinned while I/O remains modest |
-| H4 | Too many worker processes | Process count overcommits CPU/memory | Lowering workers improves stability |
-| H5 | Swap thrashing | Memory pressure forces heavy swap activity | Latency spikes with swap in/out and low free memory |
+- - H1: Instance type is undersized — Primary evidence should confirm or disprove whether instance type is undersized.
+- - H2: Memory leak or retained-state growth — Primary evidence should confirm or disprove whether memory leak or retained-state growth.
+- - H3: CPU-bound request path — Primary evidence should confirm or disprove whether cpu-bound request path.
+- - H4: Worker/process overcommit — Primary evidence should confirm or disprove whether worker/process overcommit.
 
 ## 4. What to Check First
+### Metrics
+- Check one-minute TargetResponseTime and traffic in the same window.
+- Check per-instance CPU, memory, and health rather than only environment averages.
+- Check whether the issue appears only under concurrency or also at baseline.
 
-1. Confirm sustained saturation pattern.
+### Logs
+- Read `nginx/access.log` for slow requests and status codes.
+- Read `web.stdout.log` for timeouts, slow paths, pool waits, or OOM clues.
+- Read `nginx/error.log` when saturation reaches the proxy layer.
+
+### Platform Signals
+- Run `eb health --environment-name $ENV_NAME --refresh` to identify whether the issue is one instance or the fleet.
+- Record whether health moves from `Ok` to `Warning`, `Degraded`, or `Severe`.
+- Compare the incident window to one known-good baseline window.
+
+| Signal | Normal | Abnormal | Why it matters |
+| --- | --- | --- | --- |
+| Tail latency | p95 and p99 remain close to baseline | p95 and p99 spike sharply and remain elevated | Shows user impact more clearly than averages |
+| Host pressure | CPU, memory, and disk keep safe headroom | One or more hosts remain near saturation | Separates transient bursts from chronic pressure |
+| Request-path logs | Few slow requests and no queueing signals | Timeouts, pool waits, OOM, or GC pressure appear | Shows whether performance is already failing into availability |
+| Health state | Mostly `Ok` with brief `Warning` | Sustained `Warning`, `Degraded`, or `Severe` | Confirms when performance has become an incident |
+
+## 5. Evidence to Collect
+### Required Evidence
+- First symptom timestamp in UTC.
+- One healthy comparison sample if available.
+- Relevant EB health color transitions (`Ok`, `Warning`, `Degraded`, `Severe`).
+- Exact app version, platform branch, and environment name.
+
+### Useful Context
+- Whether the symptom started after deploy, config change, platform update, or traffic change.
+- Whether the issue is isolated to one instance, one batch, one subnet, or the full environment.
+- Any recent changes to health checks, listeners, routes, worker counts, dependencies, or deployment policy.
+
+### CLI Investigation Commands
+#### 1. Correlate latency, health, and traffic
 
 ```bash
-aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization --dimensions Name=AutoScalingGroupName,Value=$ASG_NAME --statistics Average Maximum --period 60 --start-time $START_TIME --end-time $END_TIME
+eb health --environment-name $ENV_NAME --refresh
+aws elasticbeanstalk describe-environment-health --environment-name $ENV_NAME --attribute-names All
+aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB --metric-name TargetResponseTime --dimensions Name=LoadBalancer,Value=$LOAD_BALANCER_DIMENSION --statistics Average p95 --period 60 --start-time $START_TIME --end-time $END_TIME
 ```
 
-2. Pull host-level snapshots from affected instances.
+Example output:
 
-```bash
-top
-free -m
-vmstat 1 10
+```text
+instance-id           status   cause
+i-xxxxxxxxxxxxxxxxx   Warning  Application requests are failing or timing out.
+i-yyyyyyyyyyyyyyyyy   Ok       No data
+Average: 1.42
+p95: 4.87
 ```
 
-3. Review application process model and worker configuration.
+!!! tip
+    Use one-minute windows so spikes are not smoothed away.
 
-```bash
-aws elasticbeanstalk describe-configuration-settings \
-    --application-name $APP_NAME \
-    --environment-name $ENV_NAME
-```
-
-4. Inspect application logs for OOM or GC pressure signals.
+#### 2. Pull proxy and application logs
 
 ```bash
 eb logs --environment-name $ENV_NAME --all
+aws logs start-query --log-group-name "/aws/elasticbeanstalk/$ENV_NAME/var/log/nginx/access.log" --start-time $START_EPOCH --end-time $END_EPOCH --query-string "fields @timestamp, @message | limit 20"
 ```
 
-5. Correlate saturation with request volume.
+Example output:
+
+```text
+Logs were saved to /var/folders/.../logs-20260407.zip
+queryId: 12345678-90ab-cdef-1234-567890abcdef
+```
+
+!!! tip
+    `nginx/access.log` tells you that requests are slow; `web.stdout.log` tells you why.
+
+#### 3. Inspect scaling and host pressure
 
 ```bash
-aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB --metric-name RequestCount --dimensions Name=LoadBalancer,Value=$LOAD_BALANCER_DIMENSION --statistics Sum --period 60 --start-time $START_TIME --end-time $END_TIME
+aws autoscaling describe-scaling-activities --auto-scaling-group-name $ASG_NAME --max-items 20
+aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization --dimensions Name=AutoScalingGroupName,Value=$ASG_NAME --statistics Average Maximum --period 60 --start-time $START_TIME --end-time $END_TIME
 ```
 
-## 5. Evidence to Collect
+Example output:
 
-| Evidence | Command | Why it matters |
-|---|---|---|
-| CPU trend and peaks | `aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization ...` | Determines sustained versus burst saturation |
-| Memory and swap behavior | `free -m`, `vmstat 1 10` | Distinguishes memory leak from transient load |
-| Process-level usage | `top` or `htop` | Identifies hot process and worker overcommit |
-| Runtime exceptions/OOM logs | `eb logs --environment-name $ENV_NAME --all` | Proves exhaustion impact on app stability |
-| Request load baseline | `aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB --metric-name RequestCount ...` | Shows whether saturation is demand-driven or efficiency-driven |
+```text
+Activities:
+  - Description: Setting desired capacity to 8. StatusCode: Successful
+Average: 71.4
+Maximum: 92.1
+```
 
-Minimum evidence set:
+!!! tip
+    If scale-out starts only after p95 has already collapsed, autoscaling lag is part of the incident.
 
-- One 24-hour CPU chart and one incident-focused 1-minute chart.
-- Memory snapshot at healthy state and degraded state.
-- Worker/process count at runtime.
-- At least one stack trace or OOM log line if present.
+
+### Evidence Timeline
+```mermaid
+sequenceDiagram
+    participant USER as Incoming traffic
+    participant APP as App instances
+    participant DEP as Dependency or host resource
+    USER->>APP: Traffic rises or concentrates
+    APP->>DEP: Consume CPU, memory, disk, or connections
+    DEP-->>APP: Slow responses, waits, or saturation
+    Note over USER,DEP: Capture the first point where request time expands or resources stop keeping pace
+```
+
+### Sample Log Patterns
+```text
+2026-04-07T14:03:11.934Z WARN request exceeded expected latency budget
+2026-04-07T14:03:12.110Z ERROR connection pool timeout after 2000 ms
+2026/04/07 14:03:13 [error] 4110#4110: *311 upstream timed out (110: Connection timed out) while reading response header from upstream
+2026-04-07T14:03:14.220Z WARN host pressure increased on i-xxxxxxxxxxxxxxxxx
+```
+
+### CloudWatch Logs Insights Queries with Example Output
+#### Query 1. Find the earliest incident evidence
+
+```sql
+fields @timestamp, @message
+| filter @message like /heap|worker timeout/
+| sort @timestamp asc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:06 | heap |
+| 2026-04-07 09:15:17 | worker timeout |
+
+!!! tip
+    How to Read This: The first row is usually the best root-cause anchor; later rows are often downstream consequences.
+
+#### Query 2. Find the most visible failure signatures
+
+```sql
+fields @timestamp, @message
+| filter @message like /out-of-memory|prematurely closed/
+| sort @timestamp desc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:21 | out-of-memory |
+| 2026-04-07 09:15:28 | prematurely closed |
+
+!!! tip
+    How to Read This: Compare these rows with EB health color transitions and deployment or traffic timing before acting.
 
 ## 6. Validation and Disproof by Hypothesis
+### H1: Instance type is undersized
 
-### H1: Undersized instance type
-
-Validate:
-
-- High CPU/memory occurs even at normal traffic baseline.
-- Temporary larger instance class improves utilization and latency.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Instance type is undersized`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- Saturation occurs only with known abnormal code path or runaway process.
+### H2: Memory leak or retained-state growth
 
-### H2: Memory leak
-
-Validate:
-
-- Memory steadily rises with uptime and resets on restart.
-- Heap/profile data indicates retained objects without release.
-
-Disprove:
-
-- Memory usage plateaus and stays stable over long periods.
-
-### H3: CPU-bound processing
-
-Validate:
-
-- Profiling shows hot code paths consuming most CPU time.
-- Latency correlates with compute-heavy request types.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Memory leak or retained-state growth`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- CPU time mostly idle or blocked on I/O operations.
+### H3: CPU-bound request path
 
-### H4: Too many worker processes
-
-Validate:
-
-- Worker count exceeds practical vCPU and memory budget.
-- Reducing worker count lowers contention and improves latency.
-
-Disprove:
-
-- Worker count change has no measurable impact.
-
-### H5: Swap thrashing
-
-Validate:
-
-- High swap activity coincides with response time degradation.
-- Memory reclaim and major page faults increase sharply.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `CPU-bound request path`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- Swap is minimal and not active during incident.
+### H4: Worker/process overcommit
+
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Worker/process overcommit`.
+
+Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
 ## 7. Likely Root Cause Patterns
-
-- Instance family selected for cost, not sustained workload characteristics.
-- Runtime defaults for worker concurrency exceed memory budget.
-- Hidden CPU-heavy operations introduced in request path.
-- Leak in cache/session/object lifecycle under long-lived processes.
-- Swap enabled but masking severe memory pressure until latency collapse.
+- A recent change shifted the failure into this playbook's domain.
+- The earliest warning was ignored and later symptoms obscured the first cause.
+- A platform, configuration, or dependency assumption drifted from the known-good state.
+- The environment had too little safety margin for rollout, load, or path changes.
 
 ## 8. Immediate Mitigations
-
-- Temporarily scale out and, if needed, scale up instance type.
-- Reduce worker/process counts to match vCPU and memory budget.
-- Disable non-essential high-cost features under incident mode.
-- Restart degraded instances to recover while root cause remediation is underway.
-- Apply temporary rate limiting for heavy endpoints to preserve core paths.
-
-```bash
-aws autoscaling update-auto-scaling-group --auto-scaling-group-name $ASG_NAME --max-size $TEMP_MAX_SIZE --desired-capacity $TEMP_DESIRED_CAPACITY
-```
+1. Preserve the first-failure evidence before retrying or restarting anything.
+2. Contain user impact with the smallest safe rollback, scale, or routing change.
+3. Change only one suspected variable at a time and re-check health colors, logs, and metrics.
+4. Confirm that the symptom, not just the dashboard noise, has improved.
 
 ## 9. Prevention
-
-- Set capacity budgets and enforce per-release performance gates.
-- Maintain instance right-sizing reviews tied to real production metrics.
-- Add profiling in pre-production and periodic production sampling.
-- Tune worker defaults explicitly; avoid platform/runtime implicit defaults.
-- Alert on sustained CPU, memory, and swap activity before user-visible latency grows.
+- Keep environment configuration, health checks, and rollout assumptions under version control.
+- Test the same path in staging with the same platform branch and deployment policy.
+- Alert on the earliest signal for this failure mode, not only the final outage symptom.
+- Review baselines regularly so abnormal behavior is obvious during incidents.
 
 ## See Also
-
-- [High Latency Under Load](./high-latency-under-load.md)
-- [Instance Shows Degraded or Severe Health](./instance-degraded-health.md)
+- [Troubleshooting Playbooks Hub](../index.md)
 - [Health Turns Red After Successful Deploy](../deployment-availability/health-red-after-deploy.md)
-- [Immutable or Rolling Update Triggered Rollback](../deployment-availability/immutable-update-rollback.md)
-- [Load Balancer 5xx](../networking/load-balancer-5xx.md)
+- [Load Balancer Returns 5xx Errors](../networking/load-balancer-5xx.md)
 
 ## Sources
-
 - [Elastic Beanstalk monitoring with Amazon CloudWatch](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.monitoring.html)
 - [Elastic Beanstalk enhanced health reporting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html)
-- [Amazon EC2 Auto Scaling target tracking](https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-scaling-target-tracking.html)
+- [Elastic Beanstalk logs](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.logging.html)
 - [Application Load Balancer CloudWatch metrics](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-cloudwatch-metrics.html)

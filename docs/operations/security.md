@@ -106,11 +106,10 @@ Security principles reflected in AWS docs:
 
 ## See Also
 
--    [AWS Elastic Beanstalk security](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/security.html)
--    [Configuring the IMDS on your Elastic Beanstalk environment's instances](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environments-cfg-ec2-imds.html)
--    [Managing Elastic Beanstalk service roles](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/iam-servicerole.html)
--    [Managing Elastic Beanstalk instance profiles](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/iam-instanceprofile.html)
--    [Security best practices for Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/security-best-practices.html)
+-    [Networking](./networking.md)
+-    [Health Monitoring](./health-monitoring.md)
+-    [Security Architecture](../platform/security-architecture.md)
+-    [Best Practices: Security](../best-practices/security.md)
 
 ## Sources
 

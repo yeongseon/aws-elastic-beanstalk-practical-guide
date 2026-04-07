@@ -1,182 +1,253 @@
 # Instance Shows Degraded or Severe Health
 
 ## 1. Summary
-
-One or more instances in an Elastic Beanstalk environment report degraded or severe health while others may remain healthy.
-
-- Primary symptom: `eb health --refresh` shows instance-level yellow/red state.
-- Primary risk: localized issue spreads as load shifts to fewer healthy instances.
-- Typical blast radius: starts at single instance, expands under load.
-- Investigation goal: determine whether degradation comes from memory leak, disk saturation, CPU-intensive background process, or health agent communication timeout.
+One or more instances move to `Degraded` or `Severe` while other instances may stay `Ok`.
 
 ```mermaid
 flowchart TD
-    A[Instance Degraded/Severe] --> B{First Dominant Signal}
-    B --> C[Memory Growth]
-    B --> D[Disk Full]
-    B --> E[CPU Spike]
-    B --> F[Health Agent Timeout]
-    C --> G[check process RSS and restart loop]
-    D --> H[check /var and app temp files]
-    E --> I[identify top process]
-    F --> J[check agent and system responsiveness]
+    A[Instance Shows Degraded or Severe Health] --> B{Primary branch}
+    B --> C1[Memory leak or OOM pressure]
+    C1 --> D1[Collect logs, metrics, and platform signals]
+    B --> C2[Disk-full or write-path problem]
+    C2 --> D2[Collect logs, metrics, and platform signals]
+    B --> C3[CPU spike from background or runaway work]
+    C3 --> D3[Collect logs, metrics, and platform signals]
+    B --> C4[App or health reporting delay on one node]
+    C4 --> D4[Collect logs, metrics, and platform signals]
 ```
 
 ## 2. Common Misreadings
-
-- "Only one instance is bad, ignore it." Single-node degradation often predicts fleet-wide failure.
-- "Health severe means application bug only." Host-level resource issues can trigger severe state.
-- "Restart fixed it, root cause solved." Restart may only reset symptoms for leaks and growth patterns.
-- "CPU high means traffic high." Background jobs or runaway processes can consume CPU independently.
-- "Disk usage is static." Logs, temp files, and crash dumps can fill disk rapidly.
+- Average latency is enough to judge user impact.
+- Moderate CPU means there is no bottleneck.
+- A restart proves the root cause is fixed.
+- Only one slow route cannot affect the whole environment.
+- Scale-out timing never matters once new instances appear.
 
 ## 3. Competing Hypotheses
-
-| ID | Hypothesis | Mechanism | Predictive Signal |
-|---|---|---|---|
-| H1 | Application memory leak | Process heap grows over uptime, causing pressure/OOM | Memory rises monotonically per instance age |
-| H2 | Disk full | Logs/temp/artifacts consume volume and block writes | High disk usage and write errors in logs |
-| H3 | CPU spike from background process | Non-request process starves app workers | `top` shows non-web process dominating CPU |
-| H4 | Enhanced health agent timeout | Agent cannot report due host overload or connectivity issue | EB health reports stale/timeout data from affected node |
+- - H1: Memory leak or OOM pressure — Primary evidence should confirm or disprove whether memory leak or oom pressure.
+- - H2: Disk-full or write-path problem — Primary evidence should confirm or disprove whether disk-full or write-path problem.
+- - H3: CPU spike from background or runaway work — Primary evidence should confirm or disprove whether cpu spike from background or runaway work.
+- - H4: App or health reporting delay on one node — Primary evidence should confirm or disprove whether app or health reporting delay on one node.
 
 ## 4. What to Check First
+### Metrics
+- Check one-minute TargetResponseTime and traffic in the same window.
+- Check per-instance CPU, memory, and health rather than only environment averages.
+- Check whether the issue appears only under concurrency or also at baseline.
 
-1. Get current per-instance health state.
+### Logs
+- Read `nginx/access.log` for slow requests and status codes.
+- Read `web.stdout.log` for timeouts, slow paths, pool waits, or OOM clues.
+- Read `nginx/error.log` when saturation reaches the proxy layer.
+
+### Platform Signals
+- Run `eb health --environment-name $ENV_NAME --refresh` to identify whether the issue is one instance or the fleet.
+- Record whether health moves from `Ok` to `Warning`, `Degraded`, or `Severe`.
+- Compare the incident window to one known-good baseline window.
+
+| Signal | Normal | Abnormal | Why it matters |
+| --- | --- | --- | --- |
+| Tail latency | p95 and p99 remain close to baseline | p95 and p99 spike sharply and remain elevated | Shows user impact more clearly than averages |
+| Host pressure | CPU, memory, and disk keep safe headroom | One or more hosts remain near saturation | Separates transient bursts from chronic pressure |
+| Request-path logs | Few slow requests and no queueing signals | Timeouts, pool waits, OOM, or GC pressure appear | Shows whether performance is already failing into availability |
+| Health state | Mostly `Ok` with brief `Warning` | Sustained `Warning`, `Degraded`, or `Severe` | Confirms when performance has become an incident |
+
+## 5. Evidence to Collect
+### Required Evidence
+- First symptom timestamp in UTC.
+- One healthy comparison sample if available.
+- Relevant EB health color transitions (`Ok`, `Warning`, `Degraded`, `Severe`).
+- Exact app version, platform branch, and environment name.
+
+### Useful Context
+- Whether the symptom started after deploy, config change, platform update, or traffic change.
+- Whether the issue is isolated to one instance, one batch, one subnet, or the full environment.
+- Any recent changes to health checks, listeners, routes, worker counts, dependencies, or deployment policy.
+
+### CLI Investigation Commands
+#### 1. Correlate latency, health, and traffic
 
 ```bash
 eb health --environment-name $ENV_NAME --refresh
-aws elasticbeanstalk describe-instances-health --environment-name $ENV_NAME --attribute-names All
+aws elasticbeanstalk describe-environment-health --environment-name $ENV_NAME --attribute-names All
+aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB --metric-name TargetResponseTime --dimensions Name=LoadBalancer,Value=$LOAD_BALANCER_DIMENSION --statistics Average p95 --period 60 --start-time $START_TIME --end-time $END_TIME
 ```
 
-2. Collect logs for degraded instance.
+Example output:
+
+```text
+instance-id           status   cause
+i-xxxxxxxxxxxxxxxxx   Warning  Application requests are failing or timing out.
+i-yyyyyyyyyyyyyyyyy   Ok       No data
+Average: 1.42
+p95: 4.87
+```
+
+!!! tip
+    Use one-minute windows so spikes are not smoothed away.
+
+#### 2. Pull proxy and application logs
 
 ```bash
 eb logs --environment-name $ENV_NAME --all
-sudo less /var/log/eb-engine.log
-sudo less /var/log/web.stdout.log
+aws logs start-query --log-group-name "/aws/elasticbeanstalk/$ENV_NAME/var/log/nginx/access.log" --start-time $START_EPOCH --end-time $END_EPOCH --query-string "fields @timestamp, @message | limit 20"
 ```
 
-3. Check host resource utilization directly.
+Example output:
+
+```text
+Logs were saved to /var/folders/.../logs-20260407.zip
+queryId: 12345678-90ab-cdef-1234-567890abcdef
+```
+
+!!! tip
+    `nginx/access.log` tells you that requests are slow; `web.stdout.log` tells you why.
+
+#### 3. Inspect scaling and host pressure
 
 ```bash
-top
-df -h
-free -m
+aws autoscaling describe-scaling-activities --auto-scaling-group-name $ASG_NAME --max-items 20
+aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization --dimensions Name=AutoScalingGroupName,Value=$ASG_NAME --statistics Average Maximum --period 60 --start-time $START_TIME --end-time $END_TIME
 ```
 
-4. Review EC2 metrics around degradation window.
+Example output:
 
-```bash
-aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization --dimensions Name=InstanceId,Value=$INSTANCE_ID --statistics Average Maximum --period 60 --start-time $START_TIME --end-time $END_TIME
+```text
+Activities:
+  - Description: Setting desired capacity to 8. StatusCode: Successful
+Average: 71.4
+Maximum: 92.1
 ```
 
-5. Compare degraded instance against healthy peer.
+!!! tip
+    If scale-out starts only after p95 has already collapsed, autoscaling lag is part of the incident.
 
-```bash
-aws ec2 describe-instances --instance-ids $INSTANCE_ID $HEALTHY_INSTANCE_ID
+
+### Evidence Timeline
+```mermaid
+sequenceDiagram
+    participant USER as Incoming traffic
+    participant APP as App instances
+    participant DEP as Dependency or host resource
+    USER->>APP: Traffic rises or concentrates
+    APP->>DEP: Consume CPU, memory, disk, or connections
+    DEP-->>APP: Slow responses, waits, or saturation
+    Note over USER,DEP: Capture the first point where request time expands or resources stop keeping pace
 ```
 
-## 5. Evidence to Collect
+### Sample Log Patterns
+```text
+2026-04-07T14:03:11.934Z WARN request exceeded expected latency budget
+2026-04-07T14:03:12.110Z ERROR connection pool timeout after 2000 ms
+2026/04/07 14:03:13 [error] 4110#4110: *311 upstream timed out (110: Connection timed out) while reading response header from upstream
+2026-04-07T14:03:14.220Z WARN host pressure increased on i-xxxxxxxxxxxxxxxxx
+```
 
-| Evidence | Command | Why it matters |
-|---|---|---|
-| Instance-level health reasons | `aws elasticbeanstalk describe-instances-health --environment-name $ENV_NAME --attribute-names All` | Distinguishes app latency, status code, and host metrics causes |
-| Deployment/engine log | `sudo less /var/log/eb-engine.log` | Detects recurring deploy hooks, restart behavior, and failures |
-| Process and resource snapshot | `top`, `free -m`, `df -h` | Confirms CPU, memory, and disk bottleneck domain |
-| Application runtime output | `sudo less /var/log/web.stdout.log` | Shows OOM, fatal exceptions, or dependency backoff loops |
-| CloudWatch per-instance metrics | `aws cloudwatch get-metric-statistics ...` | Establishes trend and recurrence, not just one-time sample |
+### CloudWatch Logs Insights Queries with Example Output
+#### Query 1. Find the earliest incident evidence
 
-Evidence checklist:
+```sql
+fields @timestamp, @message
+| filter @message like /out of memory|no space left/
+| sort @timestamp asc
+| limit 20
+```
 
-- Record instance age/launch time relative to symptom onset.
-- Capture exact health status reason text.
-- Save one stable-instance snapshot for baseline comparison.
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:06 | out of memory |
+| 2026-04-07 09:15:17 | no space left |
+
+!!! tip
+    How to Read This: The first row is usually the best root-cause anchor; later rows are often downstream consequences.
+
+#### Query 2. Find the most visible failure signatures
+
+```sql
+fields @timestamp, @message
+| filter @message like /timed out|retrying dependency/
+| sort @timestamp desc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:21 | timed out |
+| 2026-04-07 09:15:28 | retrying dependency |
+
+!!! tip
+    How to Read This: Compare these rows with EB health color transitions and deployment or traffic timing before acting.
 
 ## 6. Validation and Disproof by Hypothesis
+### H1: Memory leak or OOM pressure
 
-### H1: Application memory leak
-
-Validate:
-
-- Resident memory increases steadily with uptime.
-- Restart drops memory and temporarily restores health.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Memory leak or OOM pressure`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- Memory remains stable; degradation occurs without growth trend.
+### H2: Disk-full or write-path problem
 
-### H2: Disk full
-
-Validate:
-
-- Disk utilization approaches 100% at failure time.
-- Logs show no space left on device errors.
-
-Disprove:
-
-- Disk has adequate free space during incident window.
-
-### H3: CPU spike from background process
-
-Validate:
-
-- `top` identifies non-request process consuming majority CPU.
-- CPU spike aligns with cron/job/runtime task schedule.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Disk-full or write-path problem`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- No abnormal process dominates CPU; request workload correlates instead.
+### H3: CPU spike from background or runaway work
 
-### H4: Enhanced health agent timeout
-
-Validate:
-
-- Health data from instance becomes stale/intermittent.
-- Host is under pressure and agent updates are delayed.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `CPU spike from background or runaway work`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- Agent data remains timely and issue maps clearly to app or resource bottleneck.
+### H4: App or health reporting delay on one node
+
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `App or health reporting delay on one node`.
+
+Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
 ## 7. Likely Root Cause Patterns
-
-- Memory leak in long-lived worker processes.
-- Log growth policy missing, causing `/var/log` saturation.
-- Background indexing/reporting task deployed on same instances as web tier.
-- Worker count too high for instance memory footprint.
-- Health checks degraded by host starvation during GC or swap pressure.
+- A recent change shifted the failure into this playbook's domain.
+- The earliest warning was ignored and later symptoms obscured the first cause.
+- A platform, configuration, or dependency assumption drifted from the known-good state.
+- The environment had too little safety margin for rollout, load, or path changes.
 
 ## 8. Immediate Mitigations
-
-- Replace unhealthy instances by increasing desired capacity, then terminating degraded node.
-- Reduce worker/process count to fit memory envelope.
-- Purge non-critical temporary files and rotate oversized logs.
-- Disable or reschedule heavy background jobs away from peak traffic windows.
-- Scale out to reduce per-instance load while investigating.
-
-```bash
-aws autoscaling update-auto-scaling-group --auto-scaling-group-name $ASG_NAME --desired-capacity $NEW_DESIRED_CAPACITY
-```
+1. Preserve the first-failure evidence before retrying or restarting anything.
+2. Contain user impact with the smallest safe rollback, scale, or routing change.
+3. Change only one suspected variable at a time and re-check health colors, logs, and metrics.
+4. Confirm that the symptom, not just the dashboard noise, has improved.
 
 ## 9. Prevention
-
-- Add alarms for memory, disk, and instance health status transitions.
-- Enforce log rotation and retention limits on instance filesystem.
-- Separate background worker tier from web-serving tier when workload grows.
-- Perform soak tests to detect memory growth over long runtimes.
-- Create automatic remediation runbooks for single-instance severe health.
+- Keep environment configuration, health checks, and rollout assumptions under version control.
+- Test the same path in staging with the same platform branch and deployment policy.
+- Alert on the earliest signal for this failure mode, not only the final outage symptom.
+- Review baselines regularly so abnormal behavior is obvious during incidents.
 
 ## See Also
-
-- [CPU and Memory Exhaustion](./cpu-memory-exhaustion.md)
-- [High Latency Under Load](./high-latency-under-load.md)
+- [Troubleshooting Playbooks Hub](../index.md)
 - [Health Turns Red After Successful Deploy](../deployment-availability/health-red-after-deploy.md)
-- [Environment Launch Failed](../deployment-availability/environment-launch-failed.md)
-- [VPC Connectivity Issues](../networking/vpc-connectivity-issues.md)
+- [Load Balancer Returns 5xx Errors](../networking/load-balancer-5xx.md)
 
 ## Sources
-
+- [Elastic Beanstalk monitoring with Amazon CloudWatch](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.monitoring.html)
 - [Elastic Beanstalk enhanced health reporting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html)
 - [Elastic Beanstalk logs](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.logging.html)
-- [Elastic Beanstalk monitoring with CloudWatch](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.monitoring.html)
-- [Amazon EC2 Auto Scaling health checks](https://docs.aws.amazon.com/autoscaling/ec2/userguide/ts-as-healthchecks.html)
+- [Application Load Balancer CloudWatch metrics](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-cloudwatch-metrics.html)

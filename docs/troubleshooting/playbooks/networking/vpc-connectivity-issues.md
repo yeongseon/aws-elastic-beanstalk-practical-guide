@@ -1,200 +1,256 @@
 # VPC Connectivity Issues
 
 ## 1. Summary
-
-Elastic Beanstalk environment cannot reach external services, or external systems cannot reach the environment as expected.
-
-- Primary symptom: outbound calls fail, inbound traffic blocked, or intermittent network timeouts.
-- Primary risk: startup failures, dependency outages, and user-visible availability incidents.
-- Typical blast radius: one environment or all environments sharing VPC/network controls.
-- Investigation goal: confirm whether NAT, route tables, security groups, NACLs, or VPC endpoints are missing or misconfigured.
+An Elastic Beanstalk environment cannot reliably reach required services, or required systems cannot reach the environment through the intended VPC path.
 
 ```mermaid
 flowchart TD
-    A[Connectivity Failure] --> B{Direction}
-    B --> C[Outbound from Instances]
-    B --> D[Inbound to Application]
-    C --> E[NAT Gateway and Routes]
-    C --> F[VPC Endpoint Availability]
-    D --> G[ALB Listener and SG]
-    D --> H[NACL and Route Path]
-    E --> I[Flow logs and route tables]
-    F --> I
-    G --> I
-    H --> I
+    A[VPC Connectivity Issues] --> B{Primary branch}
+    B --> C1[Missing or unhealthy NAT path]
+    C1 --> D1[Collect logs, metrics, and platform signals]
+    B --> C2[Route table mismatch]
+    C2 --> D2[Collect logs, metrics, and platform signals]
+    B --> C3[Security group or NACL block]
+    C3 --> D3[Collect logs, metrics, and platform signals]
+    B --> C4[Missing or incomplete VPC endpoint coverage]
+    C4 --> D4[Collect logs, metrics, and platform signals]
 ```
 
 ## 2. Common Misreadings
-
-- "Security groups are open, so network is fine." Route tables and NACLs can still block traffic.
-- "Private subnet is safer and always works." Private subnets need NAT or VPC endpoints for outbound access.
-- "One successful ping proves connectivity." Service-specific ports, DNS, and TLS can still fail.
-- "NACLs are stateless like SGs." NACLs are stateless and require explicit return-path rules.
-- "Endpoint exists, so service reachable." Endpoint policy and DNS settings can still block requests.
+- Security groups alone explain all network behavior.
+- One successful request proves the path is healthy.
+- Every 5xx or timeout means the app is broken.
+- If the certificate exists, HTTPS must work.
+- Private networking failures cannot affect deployments.
 
 ## 3. Competing Hypotheses
-
-| ID | Hypothesis | Mechanism | Predictive Signal |
-|---|---|---|---|
-| H1 | Missing NAT gateway | Private instances lack internet egress path | Outbound calls to public endpoints timeout |
-| H2 | Route table misconfigured | Subnet routes do not send traffic to IGW/NAT/endpoint | Flow logs show rejects or no route behavior |
-| H3 | Security group too restrictive | Ingress/egress blocks required ports or peers | Connection refused/timeout on specific ports |
-| H4 | NACL blocking | Stateless rules block request or response path | Intermittent or directional failures by subnet |
-| H5 | VPC endpoint missing | Private traffic to AWS service requires endpoint/NAT | Calls to AWS APIs fail from private subnets |
+- - H1: Missing or unhealthy NAT path — Primary evidence should confirm or disprove whether missing or unhealthy nat path.
+- - H2: Route table mismatch — Primary evidence should confirm or disprove whether route table mismatch.
+- - H3: Security group or NACL block — Primary evidence should confirm or disprove whether security group or nacl block.
+- - H4: Missing or incomplete VPC endpoint coverage — Primary evidence should confirm or disprove whether missing or incomplete vpc endpoint coverage.
 
 ## 4. What to Check First
+### Metrics
+- Separate client-facing symptoms from backend target-state symptoms.
+- Check target health, ALB or VPC evidence, and EB health in the same time window.
+- Treat route, listener, certificate, and SG evidence as first-class signals.
 
-1. Identify failing traffic direction and destination.
+### Logs
+- Read `nginx/access.log` for host, scheme, path, and status-code clues.
+- Read `nginx/error.log` for connection-refused, timeout, or TLS-adjacent failures.
+- Read `web.stdout.log` only after confirming traffic reached the app path.
+
+### Platform Signals
+- Run `eb health --environment-name $ENV_NAME --refresh` and capture target state early.
+- Preserve route, listener, certificate, or subnet evidence before making changes.
+- Compare one successful path with one failing path whenever the symptom is intermittent.
+
+| Signal | Normal | Abnormal | Why it matters |
+| --- | --- | --- | --- |
+| Target state | Targets are healthy and routing behaves as designed | Targets time out, reject probes, or route unexpectedly | Narrowest signal for path issues |
+| Request path | Host, scheme, and status code are consistent | Unexpected redirects, timeouts, or 5xx appear | Shows whether the client path and backend path align |
+| Control-plane config | Listeners, routes, SGs, or NAT path match intent | A listener, route, SG, or NAT assumption drifted | Explains why healthy code suddenly becomes unreachable |
+| Health color | Environment stays `Ok` or brief `Warning` | `Warning`, `Degraded`, or `Severe` persists | Shows when the path failure has become an availability incident |
+
+## 5. Evidence to Collect
+### Required Evidence
+- First symptom timestamp in UTC.
+- One healthy comparison sample if available.
+- Relevant EB health color transitions (`Ok`, `Warning`, `Degraded`, `Severe`).
+- Exact app version, platform branch, and environment name.
+
+### Useful Context
+- Whether the symptom started after deploy, config change, platform update, or traffic change.
+- Whether the issue is isolated to one instance, one batch, one subnet, or the full environment.
+- Any recent changes to health checks, listeners, routes, worker counts, dependencies, or deployment policy.
+
+### CLI Investigation Commands
+#### 1. Check EB health and target state
+
+```bash
+eb health --environment-name $ENV_NAME --refresh
+aws elasticbeanstalk describe-environment-health --environment-name $ENV_NAME --attribute-names All
+aws elbv2 describe-target-health --target-group-arn $TARGET_GROUP_ARN
+```
+
+Example output:
+
+```text
+instance-id           status   cause
+i-xxxxxxxxxxxxxxxxx   Severe   Target.Timeout
+TargetHealthDescriptions:
+  - Target.Id: i-xxxxxxxxxxxxxxxxx
+    TargetHealth.State: unhealthy
+    TargetHealth.Reason: Target.Timeout
+```
+
+!!! tip
+    Target health reason codes usually narrow the issue faster than application logs alone.
+
+#### 2. Collect proxy logs and recent events
 
 ```bash
 eb logs --environment-name $ENV_NAME --all
+aws elasticbeanstalk describe-events --environment-name $ENV_NAME --max-items 20
 ```
 
-2. Validate subnet route tables.
+Example output:
+
+```text
+Logs were saved to /var/folders/.../logs-20260407.zip
+2026-04-07 11:17:41    WARN    Instance deployment detected networking errors.
+```
+
+!!! tip
+    If proxy logs show timeouts but target health is also failing, keep both app-path and network-path hypotheses open.
+
+#### 3. Inspect the most likely network control point
 
 ```bash
 aws ec2 describe-route-tables --filters Name=association.subnet-id,Values=$SUBNET_ID_1,$SUBNET_ID_2
-```
-
-3. Inspect NAT gateway state for private subnet egress.
-
-```bash
-aws ec2 describe-nat-gateways --filter Name=vpc-id,Values=$VPC_ID
-```
-
-4. Review security group ingress and egress.
-
-```bash
 aws ec2 describe-security-groups --group-ids $ALB_SECURITY_GROUP_ID $INSTANCE_SECURITY_GROUP_ID
 ```
 
-5. Check NACL entries for involved subnets.
+Example output:
 
-```bash
-aws ec2 describe-network-acls --filters Name=association.subnet-id,Values=$SUBNET_ID_1,$SUBNET_ID_2
+```text
+RouteTables:
+  - Routes:
+      - DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId: nat-xxxxxxxxxxxxxxxxx
+SecurityGroups:
+  - GroupId: sg-xxxxxxxxxxxxxxxxx
 ```
 
-6. Confirm required VPC endpoints.
+!!! tip
+    Preserve the first-known-bad route, listener, SG, or certificate state before changing it.
 
-```bash
-aws ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=$VPC_ID
+
+### Evidence Timeline
+```mermaid
+sequenceDiagram
+    participant CLIENT as Client or instance
+    participant CTRL as Route, listener, SG, cert, or NAT
+    participant TARGET as Target or dependency
+    CLIENT->>CTRL: Send request or outbound call
+    CTRL->>TARGET: Forward, redirect, allow, or drop
+    TARGET-->>CLIENT: Success, timeout, 5xx, or TLS failure
+    Note over CLIENT,TARGET: Capture the exact path, hostname, port, and time before changing the control plane
 ```
 
-## 5. Evidence to Collect
+### Sample Log Patterns
+```text
+2026-04-07T20:11:10.018Z ERROR connect ETIMEDOUT 198.51.100.x:443
+2026/04/07 20:11:12 [error] 4110#4110: *1011 upstream timed out (110: Connection timed out) while connecting to upstream
+2026-04-07T20:11:14.010Z ERROR certificate or route expectation mismatch detected
+2 <account-id> eni-xxxxxxxxxxxxxxxxx 10.0.x.x 198.51.100.x 45678 443 6 3 180 1712520670 1712520730 REJECT OK
+```
 
-| Evidence | Command | Why it matters |
-|---|---|---|
-| Route table mappings | `aws ec2 describe-route-tables --filters Name=association.subnet-id,Values=$SUBNET_ID_1,$SUBNET_ID_2` | Confirms next-hop for each subnet |
-| NAT gateway status | `aws ec2 describe-nat-gateways --filter Name=vpc-id,Values=$VPC_ID` | Verifies outbound path from private subnets |
-| SG rule set | `aws ec2 describe-security-groups --group-ids $ALB_SECURITY_GROUP_ID $INSTANCE_SECURITY_GROUP_ID` | Validates required ingress/egress |
-| NACL entries | `aws ec2 describe-network-acls --filters Name=association.subnet-id,Values=$SUBNET_ID_1,$SUBNET_ID_2` | Detects blocked ephemeral/return traffic |
-| VPC flow logs | `aws logs filter-log-events --log-group-name $FLOW_LOG_GROUP_NAME --start-time $START_EPOCH_MS --end-time $END_EPOCH_MS` | Shows accept/reject behavior by src/dst/port |
+### CloudWatch Logs Insights Queries with Example Output
+#### Query 1. Find the earliest incident evidence
 
-Evidence hygiene:
+```sql
+fields @timestamp, @message
+| filter @message like /ETIMEDOUT|ENOTFOUND/
+| sort @timestamp asc
+| limit 20
+```
 
-- Capture source subnet, destination IP/hostname, and port for each failed flow.
-- Keep one successful flow sample for comparison.
-- Mask private addresses in shared incident notes (`10.0.x.x`).
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:06 | ETIMEDOUT |
+| 2026-04-07 09:15:17 | ENOTFOUND |
+
+!!! tip
+    How to Read This: The first row is usually the best root-cause anchor; later rows are often downstream consequences.
+
+#### Query 2. Find the most visible failure signatures
+
+```sql
+fields @timestamp, @message
+| filter @message like /REJECT|timed out/
+| sort @timestamp desc
+| limit 20
+```
+
+Example results:
+
+| @timestamp | @message |
+| --- | --- |
+| 2026-04-07 09:15:21 | REJECT |
+| 2026-04-07 09:15:28 | timed out |
+
+!!! tip
+    How to Read This: Compare these rows with EB health color transitions and deployment or traffic timing before acting.
 
 ## 6. Validation and Disproof by Hypothesis
+### H1: Missing or unhealthy NAT path
 
-### H1: Missing NAT gateway
-
-Validate:
-
-- Private subnet route points nowhere for `0.0.0.0/0` or NAT is unavailable.
-- Outbound internet requests fail consistently from private instances.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Missing or unhealthy NAT path`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- NAT is healthy and route table points to correct NAT gateway.
+### H2: Route table mismatch
 
-### H2: Route table misconfigured
-
-Validate:
-
-- Required routes absent or associated to wrong subnets.
-- Failures are subnet-specific and deterministic.
-
-Disprove:
-
-- Routes are correct and symmetric for expected path.
-
-### H3: Security group too restrictive
-
-Validate:
-
-- Missing ingress/egress rule for required peer and port.
-- Connection succeeds after temporary rule adjustment.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Route table mismatch`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- SG rules already allow required traffic path.
+### H3: Security group or NACL block
 
-### H4: NACL blocking
-
-Validate:
-
-- NACL lacks return-path ephemeral range or explicit allow entry.
-- Flow logs show rejected packets on expected traffic path.
-
-Disprove:
-
-- NACL allows both request and response traffic explicitly.
-
-### H5: VPC endpoint missing
-
-Validate:
-
-- Calls to AWS service fail in private subnet without NAT.
-- Adding endpoint resolves connectivity without internet path.
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Security group or NACL block`.
 
 Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
-- Endpoint exists and policy permits required actions.
+### H4: Missing or incomplete VPC endpoint coverage
+
+Confirm:
+- Logs, metrics, and platform state all point directly at this branch.
+- The first failing timestamp lines up with evidence expected for `Missing or incomplete VPC endpoint coverage`.
+
+Disprove:
+- The expected log or state change for this branch never appears.
+- Another branch has earlier, stronger, and more direct evidence.
 
 ## 7. Likely Root Cause Patterns
-
-- Private subnet rollout omitted NAT route association.
-- Security group refactor removed egress to dependency CIDRs.
-- NACL hardened without ephemeral return-port allowances.
-- VPC endpoint not provisioned for private-only architecture.
-- Mixed subnet assignment causes partial connectivity behavior.
+- A recent change shifted the failure into this playbook's domain.
+- The earliest warning was ignored and later symptoms obscured the first cause.
+- A platform, configuration, or dependency assumption drifted from the known-good state.
+- The environment had too little safety margin for rollout, load, or path changes.
 
 ## 8. Immediate Mitigations
-
-- Restore known-good route table associations for affected subnets.
-- Re-enable critical SG rules for service recovery, then tighten safely.
-- Add temporary NAT path for private workloads requiring internet egress.
-- Create required interface/gateway endpoint for AWS service access.
-- If impact is severe, move traffic to environment in known-good VPC.
-
-```bash
-aws ec2 replace-route --route-table-id $ROUTE_TABLE_ID --destination-cidr-block 0.0.0.0/0 --nat-gateway-id $NAT_GATEWAY_ID
-```
+1. Preserve the first-failure evidence before retrying or restarting anything.
+2. Contain user impact with the smallest safe rollback, scale, or routing change.
+3. Change only one suspected variable at a time and re-check health colors, logs, and metrics.
+4. Confirm that the symptom, not just the dashboard noise, has improved.
 
 ## 9. Prevention
-
-- Define VPC intent explicitly: public-only, private-with-NAT, or private-with-endpoints.
-- Validate network controls in CI with route, SG, and NACL policy tests.
-- Enable and retain VPC Flow Logs for all EB subnets.
-- Keep standardized subnet and route modules to reduce drift.
-- Add connectivity synthetic checks for critical dependencies.
+- Keep environment configuration, health checks, and rollout assumptions under version control.
+- Test the same path in staging with the same platform branch and deployment policy.
+- Alert on the earliest signal for this failure mode, not only the final outage symptom.
+- Review baselines regularly so abnormal behavior is obvious during incidents.
 
 ## See Also
-
+- [Troubleshooting Playbooks Hub](../index.md)
 - [Environment Launch Failed](../deployment-availability/environment-launch-failed.md)
 - [Load Balancer Returns 5xx Errors](./load-balancer-5xx.md)
-- [HTTPS Termination Issues](./https-termination-issues.md)
-- [Health Turns Red After Successful Deploy](../deployment-availability/health-red-after-deploy.md)
-- [Instance Shows Degraded or Severe Health](../performance/instance-degraded-health.md)
 
 ## Sources
-
 - [Using Elastic Beanstalk with Amazon VPC](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.vpc.html)
-- [VPC route tables](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Route_Tables.html)
-- [NAT gateways](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html)
-- [Security groups for your VPC](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html)
-- [Network ACLs](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html)
-- [VPC flow logs](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html)
-- [VPC endpoints](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints.html)
+- [Application Load Balancer target group health checks](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html)
+- [Elastic Beanstalk logs](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.logging.html)
+- [Troubleshooting Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html)

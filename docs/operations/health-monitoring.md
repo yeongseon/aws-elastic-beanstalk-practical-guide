@@ -63,7 +63,7 @@ Configure SNS notifications for environment events.
 ```bash
 aws elasticbeanstalk update-environment \
     --environment-name "my-app-prod" \
-    --option-settings Namespace=aws:elasticbeanstalk:sns:topics,OptionName=Notification Topic ARN,Value=arn:aws:sns:us-east-1:123456789012:eb-ops-alerts \
+    --option-settings Namespace=aws:elasticbeanstalk:sns:topics,OptionName=Notification Topic ARN,Value=arn:aws:sns:us-east-1:<account-id>:eb-ops-alerts \
     Namespace=aws:elasticbeanstalk:sns:topics,OptionName=Notification Protocol,Value=email \
     Namespace=aws:elasticbeanstalk:sns:topics,OptionName=Notification Endpoint,Value=ops-team@example.com \
     --profile "eb-ops" \
@@ -110,11 +110,10 @@ Operational notes:
 
 ## See Also
 
--    [Enhanced health reporting and monitoring in Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html)
--    [Basic health reporting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.healthstatus.html)
--    [Health colors and statuses](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced-status.html)
--    [Notifications and troubleshooting](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environments-health-enhanced-notifications.html)
--    [Publishing Amazon CloudWatch custom metrics for an environment](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced-cloudwatch.html)
+-    [Scaling](./scaling.md)
+-    [Updates and Patching](./updates-and-patching.md)
+-    [Troubleshooting Decision Tree](../troubleshooting/decision-tree.md)
+-    [Evidence Map](../troubleshooting/evidence-map.md)
 
 ## Sources
 

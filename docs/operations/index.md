@@ -22,6 +22,8 @@ The table below maps common operational goals to the detailed runbook pages in t
 | --- | --- |
 | Adjust capacity and scaling policy | [scaling.md](./scaling.md) |
 | Create, clone, rebuild, or swap environments | [environment-management.md](./environment-management.md) |
+| Promote a release with blue/green cutover | [blue-green-deployment.md](./blue-green-deployment.md) |
+| Replace instances safely with immutable updates | [immutable-deployment.md](./immutable-deployment.md) |
 | Observe health and alerting behavior | [health-monitoring.md](./health-monitoring.md) |
 | Apply managed platform updates safely | [updates-and-patching.md](./updates-and-patching.md) |
 | Operate VPC and load balancer settings | [networking.md](./networking.md) |
@@ -46,7 +48,7 @@ Recommended execution sequence for changes that can affect production traffic:
 2.    Save current environment configuration for recovery and consistency.
 3.    Apply changes in a non-production clone where possible.
 4.    Validate application behavior and Elastic Beanstalk health status.
-5.    Promote via CNAME swap when using blue/green methods.
+5.    Promote via CNAME swap or Route 53 cutover when using blue/green methods.
 6.    Monitor environment events until the update is fully stable.
 
 Use these standard command patterns before and after any change:
@@ -71,6 +73,7 @@ Operational notes:
 -    Prefer immutable or blue/green style changes for higher availability and lower operational risk.
 -    Keep environment variables, tags, and option settings versioned and reviewed.
 -    Use placeholders in examples to prevent exposing account-specific information.
+-    Use the dedicated blue/green and immutable runbooks when deployment policy choice is part of the change plan.
 
 ## Verification
 
@@ -84,18 +87,26 @@ Operational notes:
 -    Reapply a known-good saved configuration when a change introduces instability.
 -    Rebuild a broken environment when unmanaged changes make it invalid.
 -    Use clone and CNAME swap to return traffic to a previous stable environment.
+-    Roll back immutable deployments by redeploying a known-good version or using blue/green when environment state itself is suspect.
 -    Investigate Elastic Beanstalk events and health causes before repeating failed actions.
 
 ## See Also
 
--    [Managing Elastic Beanstalk environments](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.html)
--    [Auto Scaling your Elastic Beanstalk environment instances](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.as.html)
--    [Enhanced health reporting and monitoring in Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html)
--    [Managed platform updates](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environment-platform-update-managed.html)
+-    [Scaling](./scaling.md)
+-    [Environment Management](./environment-management.md)
+-    [Blue/Green Deployment](./blue-green-deployment.md)
+-    [Immutable Deployment](./immutable-deployment.md)
+-    [Health Monitoring](./health-monitoring.md)
+-    [Updates and Patching](./updates-and-patching.md)
+-    [Networking](./networking.md)
+-    [Security](./security.md)
+-    [Cost Optimization](./cost-optimization.md)
 
 ## Sources
 
 -    https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.html
+-    https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.CNAMESwap.html
+-    https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environmentmgmt-updates-immutable.html
 -    https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.as.html
 -    https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced.html
 -    https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environment-platform-update-managed.html

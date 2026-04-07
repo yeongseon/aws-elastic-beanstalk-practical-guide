@@ -22,6 +22,7 @@ flowchart TD
 | Deployment and Availability | `troubleshooting/playbooks/deployment-availability/deployment-failed.md` | Deploy errors or immediate rollback |
 | Performance | `troubleshooting/playbooks/performance/high-latency-under-load.md` | Slow responses and high saturation |
 | Networking | `troubleshooting/playbooks/networking/load-balancer-5xx.md` | Load balancer errors and timeout symptoms |
+| Hands-on Labs | `troubleshooting/lab-guides/index.md` | Need reproducible CloudFormation-based practice environments |
 | Methodology | `troubleshooting/methodology/troubleshooting-method.md` | Need repeatable incident workflow |
 
 ## Quick-Start Flow
@@ -95,6 +96,7 @@ aws elasticbeanstalk request-environment-info \\
 -    `troubleshooting/index.md`
 -    `troubleshooting/decision-tree.md`
 -    `troubleshooting/methodology/troubleshooting-method.md`
+-    `troubleshooting/lab-guides/index.md`
 
 ## Sources
 -    https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/troubleshooting.html

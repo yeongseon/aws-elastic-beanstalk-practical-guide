@@ -9,7 +9,7 @@ Comprehensive guide for running web applications on AWS Elastic Beanstalk — fr
 | [Start Here](https://yeongseon.github.io/aws-elastic-beanstalk-practical-guide/) | Overview, learning paths, and repository map |
 | [Platform](https://yeongseon.github.io/aws-elastic-beanstalk-practical-guide/platform/) | Architecture, environment tiers, networking, scaling |
 | [Best Practices](https://yeongseon.github.io/aws-elastic-beanstalk-practical-guide/best-practices/) | Production baseline, security, networking, deployment, scaling, reliability |
-| [Language Guides](https://yeongseon.github.io/aws-elastic-beanstalk-practical-guide/language-guides/) | Step-by-step tutorials for Python and Node.js |
+| [Language Guides](https://yeongseon.github.io/aws-elastic-beanstalk-practical-guide/language-guides/) | Step-by-step tutorials for Python, Node.js, Java, and .NET |
 | [Operations](https://yeongseon.github.io/aws-elastic-beanstalk-practical-guide/operations/) | Environment management, health monitoring, updates, cost optimization |
 | [Troubleshooting](https://yeongseon.github.io/aws-elastic-beanstalk-practical-guide/troubleshooting/) | 10 playbooks, decision tree, methodology, log source map |
 | [Reference](https://yeongseon.github.io/aws-elastic-beanstalk-practical-guide/reference/) | EB CLI cheatsheet, platform limits, environment properties |
@@ -18,6 +18,8 @@ Comprehensive guide for running web applications on AWS Elastic Beanstalk — fr
 
 - **Python** (Flask + Gunicorn)
 - **Node.js** (Express)
+- **Java** (Spring Boot + Maven)
+- **.NET** (ASP.NET Core + Kestrel)
 
 Each guide covers: local development, first deploy, configuration, logging, infrastructure as code, CI/CD, and custom domains.
 
@@ -42,6 +44,8 @@ Minimal reference applications demonstrating Elastic Beanstalk patterns:
 
 - `apps/python-flask/` — Flask + Gunicorn
 - `apps/nodejs/` — Express
+- `apps/java-springboot/` — Spring Boot + Maven
+- `apps/dotnet-aspnetcore/` — ASP.NET Core
 
 ## Contributing
 

@@ -81,7 +81,7 @@ Define environment links through `env.yaml` and process application versions.
 aws elasticbeanstalk create-application-version \
     --application-name "my-app" \
     --version-label "frontend-v2" \
-    --source-bundle S3Bucket="elasticbeanstalk-us-east-1-123456789012",S3Key="frontend-v2.zip" \
+    --source-bundle S3Bucket="elasticbeanstalk-us-east-1-<account-id>",S3Key="frontend-v2.zip" \
     --process \
     --profile "eb-ops" \
     --region "us-east-1"
@@ -122,12 +122,10 @@ Operational safeguards from AWS docs:
 
 ## See Also
 
--    [Managing Elastic Beanstalk environments](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.html)
--    [Clone an Elastic Beanstalk environment](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.clone.html)
--    [Blue/Green deployments with Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.CNAMESwap.html)
--    [Using Elastic Beanstalk saved configurations](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environment-configuration-savedconfig.html)
--    [Rebuilding Elastic Beanstalk environments](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environment-management-rebuild.html)
--    [Creating links between Elastic Beanstalk environments](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/environment-cfg-links.html)
+-    [Blue/Green Deployment](./blue-green-deployment.md)
+-    [Immutable Deployment](./immutable-deployment.md)
+-    [Scaling](./scaling.md)
+-    [How Elastic Beanstalk Works](../platform/how-elastic-beanstalk-works.md)
 
 ## Sources
 

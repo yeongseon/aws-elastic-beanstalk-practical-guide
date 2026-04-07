@@ -17,29 +17,41 @@ Guidance for AI agents working in this repository.
 │   └── workflows/              # GitHub Pages deployment
 ├── apps/
 │   ├── python-flask/           # Python reference application
-│   └── nodejs/                 # Node.js reference application
+│   ├── nodejs/                 # Node.js reference application
+│   ├── java-springboot/        # Java Spring Boot reference application
+│   └── dotnet-aspnetcore/      # .NET ASP.NET Core reference application
 ├── docs/
 │   ├── assets/                 # Images, icons
 │   ├── best-practices/         # Production patterns and anti-patterns (8 pages)
 │   ├── javascripts/            # Mermaid zoom JS
 │   ├── language-guides/
-│   │   ├── python/             # Python (Flask) — 7 tutorials + recipes
-│   │   └── nodejs/             # Node.js (Express) — 7 tutorials + recipes
-│   ├── operations/             # Day-2 operational execution (8 pages)
+│   │   ├── python/             # Python (Flask) — 7 tutorials + 14 recipes
+│   │   ├── nodejs/             # Node.js (Express) — 7 tutorials + 14 recipes
+│   │   ├── java/               # Java (Spring Boot) — 7 tutorials + 10 recipes
+│   │   └── dotnet/             # .NET (ASP.NET Core) — 7 tutorials + 10 recipes
+│   ├── operations/             # Day-2 operational execution (10 pages)
 │   ├── platform/               # Architecture and design decisions (9 pages)
-│   ├── reference/              # CLI cheatsheet, platform limits (5 pages)
+│   ├── reference/              # CLI cheatsheet, platform limits, diagnostics (7 pages)
 │   ├── start-here/             # Overview, learning paths, repository map (3 pages)
 │   ├── stylesheets/            # Custom CSS
-│   └── troubleshooting/        # Troubleshooting hub (20+ pages)
+│   └── troubleshooting/        # Troubleshooting hub (55+ pages)
 │       ├── architecture-overview.md
 │       ├── decision-tree.md
 │       ├── mental-model.md
+│       ├── evidence-map.md     # Evidence collection reference
+│       ├── quick-diagnosis-cards.md  # Quick diagnosis by symptom
+│       ├── cloudwatch/         # CloudWatch Logs Insights query library (14 pages)
+│       │   ├── http/           # HTTP queries (5xx trends, latency, slowest)
+│       │   ├── application/    # App queries (startup errors, exceptions)
+│       │   ├── platform/       # Platform queries (deploy events, health)
+│       │   └── correlation/    # Correlation queries (deploy-vs-errors)
 │       ├── first-10-minutes/   # Checklists by symptom category (4 pages)
+│       ├── lab-guides/         # Hands-on troubleshooting labs (11 pages)
 │       ├── methodology/        # Troubleshooting method, log sources (2 pages)
-│       └── playbooks/          # 10 playbooks by category
-│           ├── deployment-availability/  # 4 playbooks
-│           ├── performance/              # 3 playbooks
-│           └── networking/               # 3 playbooks
+│       └── playbooks/          # 16 playbooks by category
+│           ├── deployment-availability/  # 6 playbooks
+│           ├── performance/              # 5 playbooks
+│           └── networking/               # 5 playbooks
 └── mkdocs.yml                  # MkDocs Material configuration (7-tab nav)
 ```
 
@@ -50,10 +62,10 @@ Guidance for AI agents working in this repository.
 | **Start Here** | Entry points, learning paths, repository map | 3 |
 | **Platform** | Architecture, design decisions — WHAT and HOW it works | 9 |
 | **Best Practices** | Production patterns — HOW to use the platform well | 8 |
-| **Language Guides** | Per-language step-by-step tutorials and recipes | 28 |
-| **Operations** | Day-2 execution — HOW to run in production | 8 |
-| **Troubleshooting** | Diagnosis and resolution — hypothesis-driven | 20+ |
-| **Reference** | Quick lookup — CLI, limits, environment properties | 5 |
+| **Language Guides** | Per-language step-by-step tutorials and recipes | 79 |
+| **Operations** | Day-2 execution — HOW to run in production | 10 |
+| **Troubleshooting** | Diagnosis and resolution — hypothesis-driven | 55+ |
+| **Reference** | Quick lookup — CLI, limits, environment properties | 7 |
 
 ## Documentation Conventions
 

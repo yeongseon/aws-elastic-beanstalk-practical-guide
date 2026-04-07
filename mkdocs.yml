@@ -126,6 +126,14 @@ nav:
       - Python Recipes:
         - language-guides/python/recipes/index.md
         - language-guides/python/recipes/rds-integration.md
+        - language-guides/python/recipes/secrets-manager.md
+        - language-guides/python/recipes/iam-instance-profile.md
+        - language-guides/python/recipes/dynamodb.md
+        - language-guides/python/recipes/sqs-worker.md
+        - language-guides/python/recipes/vpc-endpoints.md
+        - language-guides/python/recipes/docker-multi-stage.md
+        - language-guides/python/recipes/cloudwatch-custom-metrics.md
+        - language-guides/python/recipes/parameter-store.md
         - language-guides/python/recipes/elasticache-redis.md
         - language-guides/python/recipes/s3-storage.md
         - language-guides/python/recipes/custom-platform-hooks.md
@@ -144,11 +152,63 @@ nav:
       - Node.js Recipes:
         - language-guides/nodejs/recipes/index.md
         - language-guides/nodejs/recipes/rds-integration.md
+        - language-guides/nodejs/recipes/secrets-manager.md
+        - language-guides/nodejs/recipes/iam-instance-profile.md
+        - language-guides/nodejs/recipes/dynamodb.md
+        - language-guides/nodejs/recipes/sqs-worker.md
+        - language-guides/nodejs/recipes/vpc-endpoints.md
+        - language-guides/nodejs/recipes/docker-multi-stage.md
+        - language-guides/nodejs/recipes/cloudwatch-custom-metrics.md
+        - language-guides/nodejs/recipes/parameter-store.md
         - language-guides/nodejs/recipes/elasticache-redis.md
         - language-guides/nodejs/recipes/s3-storage.md
         - language-guides/nodejs/recipes/custom-platform-hooks.md
         - language-guides/nodejs/recipes/worker-environments.md
         - language-guides/nodejs/recipes/docker-deploy.md
+    - Java:
+      - language-guides/java/index.md
+      - language-guides/java/01-local-run.md
+      - language-guides/java/02-first-deploy.md
+      - language-guides/java/03-configuration.md
+      - language-guides/java/04-logging-monitoring.md
+      - language-guides/java/05-infrastructure-as-code.md
+      - language-guides/java/06-ci-cd.md
+      - language-guides/java/07-custom-domain-ssl.md
+      - language-guides/java/java-runtime.md
+      - Java Recipes:
+        - language-guides/java/recipes/index.md
+        - language-guides/java/recipes/rds-integration.md
+        - language-guides/java/recipes/elasticache-redis.md
+        - language-guides/java/recipes/s3-storage.md
+        - language-guides/java/recipes/secrets-manager.md
+        - language-guides/java/recipes/iam-instance-profile.md
+        - language-guides/java/recipes/dynamodb.md
+        - language-guides/java/recipes/sqs-worker.md
+        - language-guides/java/recipes/vpc-endpoints.md
+        - language-guides/java/recipes/custom-platform-hooks.md
+        - language-guides/java/recipes/docker-deploy.md
+    - .NET:
+      - language-guides/dotnet/index.md
+      - language-guides/dotnet/01-local-run.md
+      - language-guides/dotnet/02-first-deploy.md
+      - language-guides/dotnet/03-configuration.md
+      - language-guides/dotnet/04-logging-monitoring.md
+      - language-guides/dotnet/05-infrastructure-as-code.md
+      - language-guides/dotnet/06-ci-cd.md
+      - language-guides/dotnet/07-custom-domain-ssl.md
+      - language-guides/dotnet/dotnet-runtime.md
+      - .NET Recipes:
+        - language-guides/dotnet/recipes/index.md
+        - language-guides/dotnet/recipes/rds-integration.md
+        - language-guides/dotnet/recipes/elasticache-redis.md
+        - language-guides/dotnet/recipes/s3-storage.md
+        - language-guides/dotnet/recipes/secrets-manager.md
+        - language-guides/dotnet/recipes/iam-instance-profile.md
+        - language-guides/dotnet/recipes/dynamodb.md
+        - language-guides/dotnet/recipes/sqs-worker.md
+        - language-guides/dotnet/recipes/vpc-endpoints.md
+        - language-guides/dotnet/recipes/custom-platform-hooks.md
+        - language-guides/dotnet/recipes/docker-deploy.md
   - Operations:
     - operations/index.md
     - operations/scaling.md
@@ -158,11 +218,34 @@ nav:
     - operations/networking.md
     - operations/security.md
     - operations/cost-optimization.md
+    - operations/blue-green-deployment.md
+    - operations/immutable-deployment.md
   - Troubleshooting:
     - troubleshooting/index.md
     - troubleshooting/architecture-overview.md
     - troubleshooting/decision-tree.md
     - troubleshooting/mental-model.md
+    - troubleshooting/evidence-map.md
+    - troubleshooting/quick-diagnosis-cards.md
+    - CloudWatch Query Library:
+      - troubleshooting/cloudwatch/index.md
+      - HTTP:
+        - troubleshooting/cloudwatch/http/index.md
+        - troubleshooting/cloudwatch/http/5xx-trend-over-time.md
+        - troubleshooting/cloudwatch/http/latency-by-endpoint.md
+        - troubleshooting/cloudwatch/http/slowest-requests.md
+      - Application:
+        - troubleshooting/cloudwatch/application/index.md
+        - troubleshooting/cloudwatch/application/startup-errors.md
+        - troubleshooting/cloudwatch/application/runtime-exceptions.md
+      - Platform:
+        - troubleshooting/cloudwatch/platform/index.md
+        - troubleshooting/cloudwatch/platform/deployment-events.md
+        - troubleshooting/cloudwatch/platform/health-transitions.md
+      - Correlation:
+        - troubleshooting/cloudwatch/correlation/index.md
+        - troubleshooting/cloudwatch/correlation/deploy-vs-errors.md
+        - troubleshooting/cloudwatch/correlation/scaling-vs-latency.md
     - First 10 Minutes:
       - troubleshooting/first-10-minutes/index.md
       - troubleshooting/first-10-minutes/deployment-failures.md
@@ -175,14 +258,38 @@ nav:
         - troubleshooting/playbooks/deployment-availability/health-red-after-deploy.md
         - troubleshooting/playbooks/deployment-availability/immutable-update-rollback.md
         - troubleshooting/playbooks/deployment-availability/environment-launch-failed.md
+        - troubleshooting/playbooks/deployment-availability/rolling-update-stuck.md
+        - troubleshooting/playbooks/deployment-availability/platform-update-failed.md
+        - troubleshooting/playbooks/deployment-availability/blue-green-swap-issues.md
       - Performance:
         - troubleshooting/playbooks/performance/high-latency-under-load.md
         - troubleshooting/playbooks/performance/instance-degraded-health.md
         - troubleshooting/playbooks/performance/cpu-memory-exhaustion.md
+        - troubleshooting/playbooks/performance/disk-full.md
+        - troubleshooting/playbooks/performance/connection-pool-exhaustion.md
+        - troubleshooting/playbooks/performance/memory-leak-detection.md
       - Networking:
         - troubleshooting/playbooks/networking/load-balancer-5xx.md
         - troubleshooting/playbooks/networking/vpc-connectivity-issues.md
         - troubleshooting/playbooks/networking/https-termination-issues.md
+        - troubleshooting/playbooks/networking/nat-gateway-issues.md
+        - troubleshooting/playbooks/networking/elb-health-check-failures.md
+        - troubleshooting/playbooks/networking/rds-connectivity-timeout.md
+    - Hands-on Labs:
+      - troubleshooting/lab-guides/index.md
+      - Deployment & Availability:
+        - troubleshooting/lab-guides/deployment-failure.md
+        - troubleshooting/lab-guides/health-red-after-deploy.md
+        - troubleshooting/lab-guides/immutable-update-rollback.md
+        - troubleshooting/lab-guides/environment-launch-failed.md
+      - Performance:
+        - troubleshooting/lab-guides/high-latency-under-load.md
+        - troubleshooting/lab-guides/cpu-memory-exhaustion.md
+        - troubleshooting/lab-guides/instance-degraded-health.md
+      - Networking:
+        - troubleshooting/lab-guides/load-balancer-5xx.md
+        - troubleshooting/lab-guides/vpc-connectivity-issues.md
+        - troubleshooting/lab-guides/https-termination-issues.md
     - Methodology:
       - troubleshooting/methodology/troubleshooting-method.md
       - troubleshooting/methodology/log-sources-map.md
@@ -192,3 +299,5 @@ nav:
     - reference/platform-limits.md
     - reference/environment-properties.md
     - reference/troubleshooting.md
+    - reference/cloudwatch-queries.md
+    - reference/eb-diagnostics.md

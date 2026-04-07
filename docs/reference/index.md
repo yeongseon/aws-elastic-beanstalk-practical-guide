@@ -9,6 +9,8 @@ Use these pages during deployment windows, incident triage, and change reviews w
 | Page | Primary Use | Typical Moment | Scope |
 |---|---|---|---|
 | [EB CLI Cheatsheet](./eb-cli-cheatsheet.md) | Find exact `eb` commands and long flags | Deploy, inspect, or recover an environment | Command-level |
+| [EB Diagnostics](./eb-diagnostics.md) | Interpret `eb status`, `eb health`, `eb logs`, and events | Incident triage and deployment validation | Diagnostic interpretation |
+| [CloudWatch Logs Insights Queries](./cloudwatch-queries.md) | Run reusable log analysis queries for EB log groups | Live troubleshooting and post-incident review | Query reference |
 | [Platform Limits](./platform-limits.md) | Check service quotas and fixed platform constraints | Capacity planning and preflight checks | Quotas and limits |
 | [Environment Properties](./environment-properties.md) | Find namespace + option names for `.ebextensions` and API updates | Configuration design and review | Option settings |
 | [Troubleshooting Reference](./troubleshooting.md) | Map common errors to likely causes and first fixes | Incident response | Error-to-resolution |
@@ -18,10 +20,13 @@ Use these pages during deployment windows, incident triage, and change reviews w
 ```mermaid
 flowchart LR
     A[Reference] --> B[Commands]
+    A --> F[Diagnostics]
     A --> C[Limits]
     A --> D[Configuration]
     A --> E[Troubleshooting]
     B --> B1[EB CLI Cheatsheet]
+    F --> F1[EB Diagnostics]
+    F --> F2[CloudWatch Logs Insights Queries]
     C --> C1[Platform Limits]
     D --> D1[Environment Properties]
     E --> E1[Troubleshooting Reference]
@@ -32,6 +37,8 @@ flowchart LR
 | If You Need To... | Open This Page First | Then Validate In | Why |
 |---|---|---|---|
 | Initialize a new project or application | [EB CLI Cheatsheet](./eb-cli-cheatsheet.md) | [Platform: How Elastic Beanstalk Works](../platform/how-elastic-beanstalk-works.md) | Confirms command syntax and platform resource model |
+| Interpret health colors, causes, and event timing | [EB Diagnostics](./eb-diagnostics.md) | [Operations: Health Monitoring](../operations/health-monitoring.md) | Converts CLI output into immediate operator action |
+| Query deployment and runtime logs quickly | [CloudWatch Logs Insights Queries](./cloudwatch-queries.md) | [Troubleshooting CloudWatch Hub](../troubleshooting/cloudwatch/index.md) | Reuses proven query patterns for EB log groups |
 | Tune Auto Scaling min/max and alarms | [Environment Properties](./environment-properties.md) | [Operations: Scaling](../operations/scaling.md) | Matches namespace options to runtime operations |
 | Confirm whether an environment-count limit can be raised | [Platform Limits](./platform-limits.md) | AWS Service Quotas console and API | Distinguishes adjustable quotas from fixed behavior |
 | Interpret deployment event failures quickly | [Troubleshooting Reference](./troubleshooting.md) | [Operations: Environment Management](../operations/environment-management.md) | Accelerates initial diagnosis and rollback decisions |
@@ -43,6 +50,7 @@ flowchart LR
 | Task Category | Fast Path | What to Extract |
 |---|---|---|
 | Deployments | Cheatsheet -> Troubleshooting | `eb deploy` flags, failed update error mappings |
+| Diagnostics | EB Diagnostics -> CloudWatch Queries | Health meaning, event reading, reusable log analysis |
 | Capacity Planning | Platform Limits -> Environment Properties | Account quotas, Auto Scaling and VPC options |
 | Configuration Audits | Environment Properties -> Platform docs | Namespace defaults and drift candidates |
 | Incident Triage | Troubleshooting -> Operations runbooks | Error family, first safe remediation |
@@ -61,7 +69,7 @@ flowchart LR
 | Step | Action | Output |
 |---|---|---|
 | 1 | Identify symptom (deployment, health, quota, permission) | Problem class |
-| 2 | Open the matching reference page | Canonical command, limit, or namespace |
+| 2 | Open the matching reference page | Canonical command, query, limit, or namespace |
 | 3 | Execute with long flags and masked placeholders | Reproducible, reviewable change |
 | 4 | Cross-check in Platform or Operations section | Architectural and operational fit |
 | 5 | If unresolved, pivot to troubleshooting playbooks | Deeper root-cause workflow |
@@ -72,7 +80,7 @@ flowchart LR
 |---|---|---|---|
 | Platform engineer | [Platform Limits](./platform-limits.md) | [Environment Properties](./environment-properties.md) | Quota-aware architecture baseline |
 | Release engineer | [EB CLI Cheatsheet](./eb-cli-cheatsheet.md) | [Troubleshooting Reference](./troubleshooting.md) | Repeatable deploy and rollback flow |
-| SRE / on-call | [Troubleshooting Reference](./troubleshooting.md) | [EB CLI Cheatsheet](./eb-cli-cheatsheet.md) | Fast symptom-to-command path |
+| SRE / on-call | [EB Diagnostics](./eb-diagnostics.md) | [CloudWatch Logs Insights Queries](./cloudwatch-queries.md) | Fast symptom-to-evidence path |
 | Security engineer | [Environment Properties](./environment-properties.md) | [Platform: Authentication and Access](../platform/authentication-and-access.md) | Auditable config controls |
 
 ## Internal Cross-Link Index
@@ -82,13 +90,16 @@ flowchart LR
 | Environment lifecycle | [How Elastic Beanstalk Works](../platform/how-elastic-beanstalk-works.md) | [Environment Management](../operations/environment-management.md) | [EB CLI Cheatsheet](./eb-cli-cheatsheet.md) |
 | Networking boundaries | [Networking](../platform/networking.md) | [Networking Operations](../operations/networking.md) | [Platform Limits](./platform-limits.md) |
 | Scaling policy | [Scaling Model](../platform/scaling.md) | [Scaling Runbook](../operations/scaling.md) | [Environment Properties](./environment-properties.md) |
-| Incident response | [Request Lifecycle](../platform/request-lifecycle.md) | [Health Monitoring](../operations/health-monitoring.md) | [Troubleshooting Reference](./troubleshooting.md) |
+| Incident response | [Request Lifecycle](../platform/request-lifecycle.md) | [Health Monitoring](../operations/health-monitoring.md) | [EB Diagnostics](./eb-diagnostics.md) |
+| Log analysis | [How Elastic Beanstalk Works](../platform/how-elastic-beanstalk-works.md) | [Health Monitoring](../operations/health-monitoring.md) | [CloudWatch Logs Insights Queries](./cloudwatch-queries.md) |
 
 ## AWS API Alignment
 
 | Reference Topic | Primary AWS API Family |
 |---|---|
 | EB CLI command actions | `elasticbeanstalk:*` control plane APIs |
+| EB diagnostics | `describe-environments`, `describe-environment-health`, `describe-instances-health` |
+| CloudWatch log analysis | `logs:StartQuery`, `logs:GetQueryResults` |
 | Quotas and service ceilings | `service-quotas:*` APIs |
 | Environment option updates | `update-environment` with option settings |
 | Health diagnostics | `describe-environment-health` and `describe-instances-health` |
