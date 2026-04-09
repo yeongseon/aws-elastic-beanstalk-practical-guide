@@ -295,6 +295,7 @@ nav:
       - troubleshooting/methodology/log-sources-map.md
   - Reference:
     - reference/index.md
+    - Validation Status: reference/validation-status.md
     - reference/eb-cli-cheatsheet.md
     - reference/platform-limits.md
     - reference/environment-properties.md
