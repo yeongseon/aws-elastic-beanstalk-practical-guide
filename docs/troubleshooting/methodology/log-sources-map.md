@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Log Sources Map
 
 Use this map to quickly determine where each Elastic Beanstalk troubleshooting signal is generated and how to retrieve it.

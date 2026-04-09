@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # AWS Elastic Beanstalk Practical Guide
 
 Comprehensive, practical documentation for building, deploying, operating, and troubleshooting web applications on AWS Elastic Beanstalk.

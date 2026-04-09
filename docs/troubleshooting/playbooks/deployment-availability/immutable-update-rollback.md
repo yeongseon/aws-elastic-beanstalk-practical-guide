@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Immutable or Rolling Update Triggered Rollback
 
 ## 1. Summary

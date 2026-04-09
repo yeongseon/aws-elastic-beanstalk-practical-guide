@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # How Elastic Beanstalk Works
 
 AWS Elastic Beanstalk provides an application-centric control plane on top of core AWS infrastructure services.

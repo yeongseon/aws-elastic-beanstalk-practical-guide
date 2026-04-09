@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Language Guides
 
 This section provides step-by-step tutorials for deploying and operating web applications on AWS Elastic Beanstalk using four language tracks: **Python (Flask)**, **Node.js (Express)**, **Java (Spring Boot)**, and **.NET (ASP.NET Core)**.

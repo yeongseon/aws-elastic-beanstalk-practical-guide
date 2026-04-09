@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Scaling Elastic Beanstalk Environments
 
 ## Prerequisites

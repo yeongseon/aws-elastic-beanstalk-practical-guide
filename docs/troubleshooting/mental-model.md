@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Troubleshooting Mental Model
 
 Fast troubleshooting in Elastic Beanstalk depends on two perspectives:

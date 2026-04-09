@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Logging and Monitoring for Python Environments
 
 This tutorial maps AWS Elastic Beanstalk logging and monitoring features for Python workloads.

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Python Recipes on Elastic Beanstalk
 
 This recipe collection extends the core Python tutorial track with integration and platform customization patterns documented by AWS.

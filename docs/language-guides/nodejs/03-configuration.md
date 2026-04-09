@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Configure Node.js Environments on Elastic Beanstalk
 
 ## Prerequisites

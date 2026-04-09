@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # CPU or Memory Consistently at Capacity
 
 ## 1. Summary

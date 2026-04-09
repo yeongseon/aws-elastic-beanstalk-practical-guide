@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Recipe: Add ElastiCache for Redis to Node.js
 
 ## Prerequisites

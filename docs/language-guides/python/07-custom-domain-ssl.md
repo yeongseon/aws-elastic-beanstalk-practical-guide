@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Configure Custom Domain and HTTPS
 
 This tutorial configures HTTPS for an Elastic Beanstalk Python environment using AWS Certificate Manager and load balancer listeners.

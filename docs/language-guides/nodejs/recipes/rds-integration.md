@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Recipe: Integrate Node.js with Amazon RDS
 
 ## Prerequisites

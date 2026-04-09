@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Deployment Best Practices for Elastic Beanstalk
 
 This page explains how to choose safe deployment strategies in AWS Elastic Beanstalk and how to structure release assets for predictable rollouts.

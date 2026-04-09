@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Scaling
 
 Elastic Beanstalk uses Amazon EC2 Auto Scaling to adjust capacity in response to demand and policy settings.

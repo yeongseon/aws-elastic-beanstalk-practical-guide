@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Troubleshooting Reference
 
 This page maps common Elastic Beanstalk error signals to likely causes and first-response actions.

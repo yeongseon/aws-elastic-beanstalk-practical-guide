@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Operations Runbooks for AWS Elastic Beanstalk
 
 ## Prerequisites

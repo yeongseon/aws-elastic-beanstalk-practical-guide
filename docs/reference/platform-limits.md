@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Platform Limits
 
 This page is a quick lookup for Elastic Beanstalk quotas, platform constraints, and capability boundaries that commonly affect design and operations.

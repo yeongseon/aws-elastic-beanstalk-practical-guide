@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Build Worker Environments with SQS
 
 This tutorial introduces Elastic Beanstalk worker environments for asynchronous processing.

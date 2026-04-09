@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Common Elastic Beanstalk Anti-Patterns
 
 This page highlights frequent production anti-patterns in AWS Elastic Beanstalk and maps each to safer alternatives.

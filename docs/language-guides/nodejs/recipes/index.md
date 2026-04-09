@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Node.js Recipes for Elastic Beanstalk
 
 ## Prerequisites

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Custom Domain and HTTPS for Node.js Environments
 
 ## Prerequisites

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Infrastructure as Code for Python Environments
 
 This tutorial explains infrastructure-as-code approaches for AWS Elastic Beanstalk Python environments.

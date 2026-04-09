@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Security Best Practices for Elastic Beanstalk
 
 This page outlines practical security controls for AWS Elastic Beanstalk environments aligned to AWS guidance.

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # First 10 Minutes Checklists
 
 This section provides symptom-driven checklists for rapid stabilization in the first 10 minutes of an Elastic Beanstalk incident.

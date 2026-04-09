@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Environment Properties
 
 This page is a quick lookup reference for high-impact Elastic Beanstalk configuration namespaces and option settings.

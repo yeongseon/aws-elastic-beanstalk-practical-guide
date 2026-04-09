@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Reference
 
 The Reference section is the fast lookup layer for operators who already know the workflow and need exact commands, limits, and option names.

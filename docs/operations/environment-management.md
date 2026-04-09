@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Environment Management Operations
 
 ## Prerequisites

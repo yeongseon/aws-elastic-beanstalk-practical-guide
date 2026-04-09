@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Recipe: Custom Platform Hooks and nginx Extensions
 
 ## Prerequisites

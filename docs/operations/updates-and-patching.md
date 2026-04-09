@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Updates and Patching Operations
 
 ## Prerequisites

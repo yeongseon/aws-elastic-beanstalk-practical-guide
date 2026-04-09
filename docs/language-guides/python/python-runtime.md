@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Python Runtime on Amazon Linux 2023
 
 This tutorial describes runtime behavior for AWS Elastic Beanstalk Python on Amazon Linux 2023.

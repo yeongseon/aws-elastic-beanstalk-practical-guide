@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Load Balancer Returns 5xx Errors
 
 ## 1. Summary

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Instance Shows Degraded or Severe Health
 
 ## 1. Summary

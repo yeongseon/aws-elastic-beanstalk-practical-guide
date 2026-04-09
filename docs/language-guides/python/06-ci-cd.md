@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # CI/CD for Python on Elastic Beanstalk
 
 This tutorial shows how to automate deployments by promoting Elastic Beanstalk application versions through pipeline stages.

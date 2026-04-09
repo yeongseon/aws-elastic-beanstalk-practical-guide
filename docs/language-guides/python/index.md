@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Python on AWS Elastic Beanstalk
 
 This track focuses on AWS Elastic Beanstalk Python on Amazon Linux 2023 using Flask and Gunicorn.

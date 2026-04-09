@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Authentication and Access
 
 AWS Elastic Beanstalk access control is implemented through AWS Identity and Access Management (IAM). A production-ready model separates platform orchestration permissions, application runtime permissions, and operator permissions.

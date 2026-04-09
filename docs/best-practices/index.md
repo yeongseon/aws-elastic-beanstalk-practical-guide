@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Elastic Beanstalk Best Practices
 
 This section consolidates production-oriented guidance for AWS Elastic Beanstalk so teams can standardize secure, reliable, and repeatable operations.

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Logging and Monitoring for Node.js Environments
 
 ## Prerequisites

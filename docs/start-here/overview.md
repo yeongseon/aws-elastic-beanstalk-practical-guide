@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # AWS Elastic Beanstalk Practical Guide
 
 This repository is a comprehensive practical guide for building, deploying, operating, and troubleshooting web applications on AWS Elastic Beanstalk. Use this Start Here section to understand the guide layout and choose the right path for your role.

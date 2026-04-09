@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Networking Best Practices for Elastic Beanstalk
 
 This page describes production networking patterns for AWS Elastic Beanstalk environments running inside an Amazon VPC.

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # First Elastic Beanstalk Deploy for Python
 
 This tutorial explains the first deployment workflow for a Python Flask app on AWS Elastic Beanstalk.

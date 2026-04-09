@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # CI/CD for Node.js Elastic Beanstalk Deployments
 
 ## Prerequisites

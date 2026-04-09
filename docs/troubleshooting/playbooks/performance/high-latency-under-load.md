@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # High Latency Under Load
 
 ## 1. Summary

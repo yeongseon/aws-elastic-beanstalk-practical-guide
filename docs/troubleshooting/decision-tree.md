@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Troubleshooting Decision Tree
 
 Use this triage flow to route symptoms to the right diagnostic lane and playbook category.

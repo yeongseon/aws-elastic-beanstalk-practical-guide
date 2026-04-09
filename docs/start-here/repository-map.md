@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Repository Map
 
 This page explains the repository structure and where to find each type of content.

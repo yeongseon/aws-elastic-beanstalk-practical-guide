@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Run a Flask App Locally for Elastic Beanstalk
 
 This tutorial prepares a Flask project for AWS Elastic Beanstalk Python by matching local behavior to the documented deployment model.

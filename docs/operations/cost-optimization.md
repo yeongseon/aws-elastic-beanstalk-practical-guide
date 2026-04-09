@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Cost Optimization Operations
 
 ## Prerequisites

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Deploy Flask with Docker on Elastic Beanstalk
 
 This tutorial shows the Docker deployment path for a Flask application on Elastic Beanstalk.

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # EB CLI Cheatsheet
 
 This page is a quick lookup reference for high-usage Elastic Beanstalk CLI commands with long flags and practical operator context.

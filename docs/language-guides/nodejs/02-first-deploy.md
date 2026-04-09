@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # First Node.js Deployment to Elastic Beanstalk
 
 This tutorial turns a local Express app into its first Elastic Beanstalk environment using explicit EB CLI commands, repeatable configuration, and basic deployment verification.

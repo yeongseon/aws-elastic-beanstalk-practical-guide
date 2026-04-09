@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Troubleshooting Method
 
 Use a repeatable method to avoid random changes during incidents: Observe -> Hypothesize -> Test -> Conclude.

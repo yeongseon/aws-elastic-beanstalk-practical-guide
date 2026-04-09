@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Use Amazon S3 from a Python Elastic Beanstalk App
 
 This tutorial configures S3 object operations from a Flask app running in Elastic Beanstalk.

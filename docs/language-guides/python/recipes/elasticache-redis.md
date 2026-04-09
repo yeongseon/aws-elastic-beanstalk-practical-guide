@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Add ElastiCache Redis to a Python Environment
 
 This tutorial connects a Python Flask application on Elastic Beanstalk to Amazon ElastiCache for Redis.

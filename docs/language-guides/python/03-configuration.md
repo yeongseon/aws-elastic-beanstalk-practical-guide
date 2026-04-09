@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Configure Python Environments on Elastic Beanstalk
 
 This tutorial covers the configuration layers used by AWS Elastic Beanstalk for Python applications.

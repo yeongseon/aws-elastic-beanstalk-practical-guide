@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Production Baseline for Elastic Beanstalk
 
 This page defines minimum production standards for AWS Elastic Beanstalk environments so teams can ship with a consistent operational floor.

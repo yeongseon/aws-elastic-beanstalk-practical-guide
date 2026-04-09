@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Node.js Runtime Reference on Elastic Beanstalk
 
 ## Prerequisites

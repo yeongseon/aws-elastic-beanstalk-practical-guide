@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Health Turns Red After Successful Deploy
 
 ## 1. Summary

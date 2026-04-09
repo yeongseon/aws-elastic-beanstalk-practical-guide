@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Request Lifecycle
 
 Understanding request lifecycle is essential for diagnosing latency, 5xx errors, and health transitions in Elastic Beanstalk environments.

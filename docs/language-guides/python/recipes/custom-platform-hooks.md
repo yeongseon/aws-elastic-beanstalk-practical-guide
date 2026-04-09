@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Customize Platform Hooks and NGINX Extensions
 
 This tutorial uses Elastic Beanstalk Linux platform extension points for Python environments.

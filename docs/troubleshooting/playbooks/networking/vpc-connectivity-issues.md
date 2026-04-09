@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # VPC Connectivity Issues
 
 ## 1. Summary

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Environment Tiers
 
 Elastic Beanstalk supports two environment tiers: **Web Server** and **Worker**.

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Reliability Best Practices for Elastic Beanstalk
 
 This page focuses on reliability controls that keep AWS Elastic Beanstalk applications available through failures, deploys, and scaling transitions.

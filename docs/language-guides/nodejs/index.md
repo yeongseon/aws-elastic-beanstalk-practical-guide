@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Node.js on AWS Elastic Beanstalk
 
 ## Prerequisites

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Platform
 
 The Platform section explains how AWS Elastic Beanstalk works under the hood so you can make predictable architecture and operations decisions.

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Troubleshooting Playbooks Hub
 
 This hub groups Elastic Beanstalk remediation playbooks by failure pattern so responders can move from diagnosis to evidence-backed action without skipping verification.

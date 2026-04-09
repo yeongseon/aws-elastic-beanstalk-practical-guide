@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Infrastructure as Code for Node.js Environments
 
 ## Prerequisites

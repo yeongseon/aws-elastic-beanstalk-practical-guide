@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Deployment Failed and Environment Rolled Back
 
 ## 1. Summary

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Environment Launch Failed
 
 ## 1. Summary

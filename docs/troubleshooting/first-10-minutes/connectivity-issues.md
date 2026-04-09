@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # First 10 Minutes: Connectivity Issues
 
 ## Symptoms

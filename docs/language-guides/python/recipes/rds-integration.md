@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Integrate Amazon RDS with Python on Elastic Beanstalk
 
 This tutorial follows AWS guidance for connecting a Flask application to Amazon RDS from Elastic Beanstalk.

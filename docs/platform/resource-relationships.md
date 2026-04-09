@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Resource Relationships
 
 Elastic Beanstalk environments interact with multiple AWS services.

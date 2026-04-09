@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Scaling Best Practices for Elastic Beanstalk
 
 This page provides practical guidance for scaling AWS Elastic Beanstalk environments with predictable performance and controlled cost.

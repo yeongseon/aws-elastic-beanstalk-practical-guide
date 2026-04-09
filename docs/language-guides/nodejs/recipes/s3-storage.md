@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Recipe: Use Amazon S3 from Node.js on Elastic Beanstalk
 
 ## Prerequisites

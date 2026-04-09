@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Learning Paths
 
 Different roles need different paths through this guide. Choose the path that matches your current goal, then follow it in order.

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Security Architecture
 
 Security architecture for AWS Elastic Beanstalk is a layered system spanning IAM, networking, encryption, patching, secret distribution, and continuous verification. Strong results come from composing these controls so that a single failure does not expose the environment.

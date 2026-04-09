@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Troubleshooting Architecture Overview
 
 Elastic Beanstalk troubleshooting is fastest when you diagnose by component ownership and failure domain instead of by individual error messages.

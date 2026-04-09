@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Run Express Locally for Elastic Beanstalk
 
 ## Prerequisites

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Recipe: Deploy Node.js with Docker on Elastic Beanstalk
 
 ## Prerequisites

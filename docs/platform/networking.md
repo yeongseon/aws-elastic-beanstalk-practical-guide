@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Networking
 
 Elastic Beanstalk environments run inside your Amazon VPC, where subnet design, ingress filtering, egress paths, and Availability Zone placement determine exposure, connectivity, and operational resilience.
